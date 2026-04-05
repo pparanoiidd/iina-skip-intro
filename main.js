@@ -1,10 +1,11 @@
 const core = iina.core;
 const event = iina.event;
+const mpv = iina.mpv;
 const overlay = iina.overlay;
 const console = iina.console;
 
-const INTRO_START = 30;
-const INTRO_END = 120;
+const INTRO_START = 101;
+const INTRO_END = 191;
 
 let overlayReady = false;
 let overlayVisible = false;
@@ -17,7 +18,8 @@ function log(message) {
 }
 
 function getPosition() {
-  return typeof core.status.position === 'number' ? core.status.position : 0;
+  const position = mpv.getNumber('time-pos');
+  return typeof position === 'number' && isFinite(position) ? position : null;
 }
 
 function dismissOverlay() {
@@ -62,11 +64,8 @@ function sendState(visible) {
 }
 
 function setOverlayVisible(visible) {
-  if (visible) overlay.show();
   sendState(visible);
-  overlay.setOpacity(visible ? 1 : 0);
   overlay.setClickable(visible);
-  if (!visible) overlay.hide();
 }
 
 function shouldShowOverlay(position) {
@@ -78,6 +77,10 @@ function updateOverlay(position) {
   if (typeof position !== 'number') {
     position = getPosition();
   }
+  if (typeof position !== 'number' || !isFinite(position)) {
+    return;
+  }
+
   var show = shouldShowOverlay(position);
   if (show === overlayVisible) return;
 
@@ -102,8 +105,9 @@ event.on('iina.window-loaded', function () {
 event.on('iina.plugin-overlay-loaded', function () {
   log('Overlay view loaded');
   overlayReady = true;
+  overlay.show();
+  overlay.setClickable(false);
   registerHandlers();
-  setOverlayVisible(false);
   updateOverlay();
 });
 
