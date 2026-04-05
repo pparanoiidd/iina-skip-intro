@@ -1,0 +1,11 @@
+{
+  "name": "Skip Intro",
+  "identifier": "com.pparanoiidd.skipintro",
+  "version": "0.1.1",
+  "author": {
+    "name": "pparanoiidd"
+  },
+  "description": "Skip-intro overlay for IINA.",
+  "entry": "main.js",
+  "permissions": ["video-overlay"]
+}
