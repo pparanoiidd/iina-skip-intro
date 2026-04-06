@@ -6,7 +6,8 @@ const preferences = iina.preferences;
 const console = iina.console;
 
 const INTRO_MAX_START = 300;
-const INTRO_MAX_DURATION = 180;
+const INTRO_SINGLE_MAX_DURATION = 180;
+const INTRO_COMBINED_MAX_DURATION = 240;
 const INTRO_MAX_START_RATIO = 0.25;
 const INTRO_PROMPT_AUTO_DISMISS_MS = 10000;
 const PREF_PROGRESS_INDICATOR_STYLE = 'progress_indicator_style';
@@ -82,7 +83,9 @@ function detectIntroFromChapters(chapters, duration) {
 
     var end = getChapterStart(chapters[endChapterIndex]);
     if (end === null || end <= start) continue;
-    if (end - start > INTRO_MAX_DURATION) continue;
+    var maxDuration =
+      titles.length > 1 ? INTRO_COMBINED_MAX_DURATION : INTRO_SINGLE_MAX_DURATION;
+    if (end - start > maxDuration) continue;
 
     return {
       start: start,
