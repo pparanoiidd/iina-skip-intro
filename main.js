@@ -2,11 +2,16 @@ const core = iina.core;
 const event = iina.event;
 const mpv = iina.mpv;
 const overlay = iina.overlay;
+const preferences = iina.preferences;
 const console = iina.console;
 
 const INTRO_MAX_START = 300; // Intros must start within the first 5 minutes of the video
 const INTRO_MAX_DURATION = 180;
 const INTRO_MAX_START_RATIO = 0.25; // Intro must start within the first 25% of the video
+const INTRO_PROMPT_AUTO_DISMISS_SECONDS = 10;
+const PREF_PROGRESS_INDICATOR_STYLE = 'progress_indicator_style';
+const PROGRESS_INDICATOR_FULL = 'full';
+const PROGRESS_INDICATOR_BAR = 'bar';
 
 let overlayReady = false;
 let overlayVisible = false;
@@ -14,6 +19,7 @@ let dismissed = false;
 let overlayInitialized = false;
 let handlersRegistered = false;
 let currentIntro = null;
+let autoDismissTimer = null;
 
 function log(message) {
   console.log('[Skip Intro] ' + message);
@@ -114,6 +120,33 @@ function detectCurrentIntro() {
   }
 }
 
+function getProgressIndicatorStyle() {
+  if (!preferences || typeof preferences.get !== 'function') {
+    return PROGRESS_INDICATOR_FULL;
+  }
+
+  const style = preferences.get(PREF_PROGRESS_INDICATOR_STYLE);
+  return style === PROGRESS_INDICATOR_BAR ? PROGRESS_INDICATOR_BAR : PROGRESS_INDICATOR_FULL;
+}
+
+function clearAutoDismissTimer() {
+  if (autoDismissTimer === null) return;
+  clearTimeout(autoDismissTimer);
+  autoDismissTimer = null;
+}
+
+function startAutoDismissTimer() {
+  clearAutoDismissTimer();
+  autoDismissTimer = setTimeout(function () {
+    autoDismissTimer = null;
+
+    if (!overlayVisible || dismissed) return;
+
+    log('Auto dismissed after ' + INTRO_PROMPT_AUTO_DISMISS_SECONDS + 's');
+    dismissOverlay();
+  }, INTRO_PROMPT_AUTO_DISMISS_SECONDS * 1000);
+}
+
 function dismissOverlay() {
   dismissed = true;
   setOverlayVisible(false);
@@ -157,11 +190,19 @@ function sendState(visible) {
   overlay.postMessage('state', {
     visible: visible,
     introEnd: currentIntro ? currentIntro.end : null,
+    autoDismissMs: INTRO_PROMPT_AUTO_DISMISS_SECONDS * 1000,
+    progressIndicatorStyle: getProgressIndicatorStyle(),
   });
   overlayVisible = visible;
 }
 
 function setOverlayVisible(visible) {
+  if (visible) {
+    startAutoDismissTimer();
+  } else {
+    clearAutoDismissTimer();
+  }
+
   sendState(visible);
   overlay.setClickable(visible);
 }

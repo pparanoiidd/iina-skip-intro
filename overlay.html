@@ -23,6 +23,8 @@
       }
 
       #box {
+        --auto-dismiss-ms: 10000ms;
+
         position: relative;
         display: flex;
         align-items: center;
@@ -46,6 +48,24 @@
         pointer-events: none;
       }
 
+      #box::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: rgba(255, 255, 255, 0.1);
+        opacity: 0;
+        transform: scaleX(1);
+        transform-origin: left center;
+        pointer-events: none;
+      }
+
+      #box[data-progress-style='bar']::before {
+        inset: auto 0 0;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.34);
+      }
+
       #box.visible {
         opacity: 1;
         visibility: visible;
@@ -53,11 +73,18 @@
         transition-delay: 0s, 0s, 0s, 0s;
       }
 
+      #box.visible::before {
+        opacity: 1;
+        animation: auto-dismiss-progress var(--auto-dismiss-ms) linear forwards;
+      }
+
       #box.visible:hover {
         filter: brightness(1.18);
       }
 
       #title {
+        position: relative;
+        z-index: 1;
         color: rgba(255, 255, 255, 0.42);
         font-size: 20px;
         font-weight: 600;
@@ -66,6 +93,16 @@
         mix-blend-mode: color-dodge;
         pointer-events: none;
       }
+
+      @keyframes auto-dismiss-progress {
+        from {
+          transform: scaleX(1);
+        }
+
+        to {
+          transform: scaleX(0);
+        }
+      }
     </style>
   </head>
   <body>
@@ -73,6 +110,7 @@
       id="box"
       aria-live="polite"
       data-clickable
+      data-progress-style="full"
       role="button"
       tabindex="0"
       aria-label="Skip Intro"
@@ -87,6 +125,18 @@
 
       function setVisible(visible) {
         box.classList.toggle('visible', !!visible);
+      }
+
+      function setAutoDismissDuration(milliseconds) {
+        if (typeof milliseconds !== 'number' || !isFinite(milliseconds) || milliseconds <= 0) {
+          return;
+        }
+
+        box.style.setProperty('--auto-dismiss-ms', milliseconds + 'ms');
+      }
+
+      function setProgressIndicatorStyle(style) {
+        box.dataset.progressStyle = style === 'bar' ? 'bar' : 'full';
       }
 
       function postMessage(name, payload) {
@@ -123,6 +173,9 @@
             setVisible(false);
             return;
           }
+
+          setAutoDismissDuration(state.autoDismissMs);
+          setProgressIndicatorStyle(state.progressIndicatorStyle);
           setVisible(true);
         });
       }

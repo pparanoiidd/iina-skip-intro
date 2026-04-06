@@ -7,5 +7,9 @@
   },
   "description": "Skip-intro overlay for IINA.",
   "entry": "main.js",
+  "preferencesPage": "preferences.html",
+  "preferenceDefaults": {
+    "progress_indicator_style": "full"
+  },
   "permissions": ["video-overlay"]
 }
