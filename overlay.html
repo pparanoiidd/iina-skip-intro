@@ -19,7 +19,7 @@
         align-items: flex-end;
         justify-content: flex-end;
         box-sizing: border-box;
-        padding: clamp(2px, calc(1.5vw), 46px);
+        padding: clamp(2px, 1.5vw, 46px);
       }
 
       #box {
@@ -70,12 +70,16 @@
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
-        transition-delay: 0s, 0s, 0s, 0s;
+        transition-delay: 0s;
       }
 
       #box.visible::before {
         opacity: 1;
         animation: auto-dismiss-progress var(--auto-dismiss-ms) linear forwards;
+      }
+
+      #box.auto-dismiss-paused::before {
+        animation-play-state: paused;
       }
 
       #box.visible:hover {
@@ -120,11 +124,11 @@
 
     <script>
       var box = document.getElementById('box');
-      var skipBtn = box;
-      var dismissBtn = document.getElementById('dismiss-btn');
+      var autoDismissPlaybackPaused = false;
 
       function setVisible(visible) {
         box.classList.toggle('visible', !!visible);
+        updateAutoDismissPaused();
       }
 
       function setAutoDismissDuration(milliseconds) {
@@ -145,29 +149,48 @@
         }
       }
 
+      function updateAutoDismissPaused() {
+        var visible = box.classList.contains('visible');
+        var interactionPaused = visible && box.matches(':hover, :focus');
+
+        box.classList.toggle(
+          'auto-dismiss-paused',
+          visible && (interactionPaused || autoDismissPlaybackPaused)
+        );
+      }
+
       window.addEventListener('error', function (event) {
         postMessage('error', event.message);
       });
 
-      skipBtn.addEventListener('click', function () {
+      box.addEventListener('click', function () {
         postMessage('skip');
       });
 
-      skipBtn.addEventListener('keydown', function (event) {
+      box.addEventListener('keydown', function (event) {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           postMessage('skip');
         }
       });
 
-      // Keep dismiss handling in place so a close affordance can be restored later.
-      if (dismissBtn) {
-        dismissBtn.addEventListener('click', function () {
-          postMessage('dismiss');
-        });
-      }
+      box.addEventListener('animationend', function (event) {
+        if (event.animationName === 'auto-dismiss-progress') {
+          postMessage('autoDismiss');
+        }
+      });
+
+      box.addEventListener('mouseenter', updateAutoDismissPaused);
+      box.addEventListener('mouseleave', updateAutoDismissPaused);
+      box.addEventListener('focus', updateAutoDismissPaused);
+      box.addEventListener('blur', updateAutoDismissPaused);
 
       if (typeof iina !== 'undefined') {
+        iina.onMessage('playbackPaused', function (paused) {
+          autoDismissPlaybackPaused = !!paused;
+          updateAutoDismissPaused();
+        });
+
         iina.onMessage('state', function (state) {
           if (!state || !state.visible) {
             setVisible(false);
@@ -175,6 +198,7 @@
           }
 
           setAutoDismissDuration(state.autoDismissMs);
+          autoDismissPlaybackPaused = !!state.playbackPaused;
           setProgressIndicatorStyle(state.progressIndicatorStyle);
           setVisible(true);
         });
