@@ -9,6 +9,7 @@ const INTRO_MAX_START = 300;
 const INTRO_SINGLE_MAX_DURATION = 180;
 const INTRO_COMBINED_MAX_DURATION = 240;
 const INTRO_MAX_START_RATIO = 0.25;
+const INTRO_PROMPT_LEAD_IN = 1;
 const INTRO_PROMPT_AUTO_DISMISS_MS = 10000;
 const PREF_PROGRESS_INDICATOR_STYLE = 'progress_indicator_style';
 const PROGRESS_INDICATOR_FULL = 'full';
@@ -192,7 +193,10 @@ function setOverlayVisible(visible) {
 
 function shouldShowOverlay(position) {
   return (
-    !!currentIntro && !dismissed && position >= currentIntro.start && position < currentIntro.end
+    !!currentIntro &&
+    !dismissed &&
+    position >= Math.max(0, currentIntro.start - INTRO_PROMPT_LEAD_IN) &&
+    position < currentIntro.end
   );
 }
 
