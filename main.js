@@ -4,14 +4,16 @@ const mpv = iina.mpv;
 const overlay = iina.overlay;
 const console = iina.console;
 
-const INTRO_START = 101;
-const INTRO_END = 191;
+const INTRO_MAX_START = 300; // Intros must start within the first 5 minutes of the video
+const INTRO_MAX_DURATION = 180;
+const INTRO_MAX_START_RATIO = 0.25; // Intro must start within the first 25% of the video
 
 let overlayReady = false;
 let overlayVisible = false;
 let dismissed = false;
 let overlayInitialized = false;
 let handlersRegistered = false;
+let currentIntro = null;
 
 function log(message) {
   console.log('[Skip Intro] ' + message);
@@ -20,6 +22,96 @@ function log(message) {
 function getPosition() {
   const position = mpv.getNumber('time-pos');
   return typeof position === 'number' && isFinite(position) ? position : null;
+}
+
+function getDuration() {
+  const duration = mpv.getNumber('duration');
+  return typeof duration === 'number' && isFinite(duration) && duration > 0 ? duration : null;
+}
+
+function getChapterStart(chapter) {
+  if (!chapter) return null;
+  return typeof chapter.start === 'number' && isFinite(chapter.start) ? chapter.start : null;
+}
+
+function normalizeChapterTitle(title) {
+  if (typeof title !== 'string') return '';
+  return title.trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ');
+}
+
+function isIntroChapterTitle(title) {
+  const normalized = normalizeChapterTitle(title);
+  return (
+    /^op\s*\d*$/.test(normalized) ||
+    /^opening(?:\s+\d+|\s+(?:theme|song|credits))?$/.test(normalized) ||
+    normalized === 'intro' ||
+    normalized === 'title sequence' ||
+    normalized === 'main title' ||
+    /^ncop\s*\d*$/.test(normalized) ||
+    /^non credit opening(?:\s+\d+)?$/.test(normalized)
+  );
+}
+
+function detectIntroFromChapters(chapters, duration) {
+  if (!Array.isArray(chapters) || chapters.length < 2) return null;
+  if (typeof duration !== 'number' || !isFinite(duration) || duration <= 0) return null;
+
+  for (var i = 0; i < chapters.length - 1; i++) {
+    if (!isIntroChapterTitle(chapters[i].title)) continue;
+
+    var start = getChapterStart(chapters[i]);
+    if (start === null || start < 0) continue;
+    if (start > INTRO_MAX_START || start > duration * INTRO_MAX_START_RATIO) continue;
+
+    var endChapterIndex = i + 1;
+    var titles = [chapters[i].title || ''];
+    while (
+      endChapterIndex < chapters.length &&
+      isIntroChapterTitle(chapters[endChapterIndex].title)
+    ) {
+      titles.push(chapters[endChapterIndex].title || '');
+      endChapterIndex++;
+    }
+
+    if (endChapterIndex >= chapters.length) continue;
+
+    var end = getChapterStart(chapters[endChapterIndex]);
+    if (end === null || end <= start) continue;
+    if (end - start > INTRO_MAX_DURATION) continue;
+
+    return {
+      start: start,
+      end: end,
+      endChapterIndex: endChapterIndex,
+      titles: titles,
+    };
+  }
+
+  return null;
+}
+
+function detectCurrentIntro() {
+  try {
+    const duration = getDuration();
+    const chapters = core.getChapters();
+    currentIntro = detectIntroFromChapters(chapters, duration);
+  } catch (error) {
+    currentIntro = null;
+    log('Chapter intro detection failed: ' + error);
+  }
+
+  if (currentIntro) {
+    log(
+      'Detected intro from ' +
+        currentIntro.start.toFixed(2) +
+        's to ' +
+        currentIntro.end.toFixed(2) +
+        's: ' +
+        currentIntro.titles.join(', '),
+    );
+  } else {
+    log('No chapter intro detected');
+  }
 }
 
 function dismissOverlay() {
@@ -32,8 +124,14 @@ function registerHandlers() {
   handlersRegistered = true;
 
   overlay.onMessage('skip', function () {
-    log('Skip requested - seeking to ' + INTRO_END);
-    core.seekTo(INTRO_END);
+    if (!currentIntro) {
+      log('Skip requested with no detected intro');
+      dismissOverlay();
+      return;
+    }
+
+    log('Skip requested - seeking to ' + currentIntro.end.toFixed(2) + 's');
+    core.seekTo(currentIntro.end);
     dismissOverlay();
   });
 
@@ -58,7 +156,7 @@ function initializeOverlay() {
 function sendState(visible) {
   overlay.postMessage('state', {
     visible: visible,
-    introEnd: INTRO_END,
+    introEnd: currentIntro ? currentIntro.end : null,
   });
   overlayVisible = visible;
 }
@@ -69,7 +167,9 @@ function setOverlayVisible(visible) {
 }
 
 function shouldShowOverlay(position) {
-  return !dismissed && position >= INTRO_START && position < INTRO_END;
+  return (
+    !!currentIntro && !dismissed && position >= currentIntro.start && position < currentIntro.end
+  );
 }
 
 function updateOverlay(position) {
@@ -90,6 +190,7 @@ function updateOverlay(position) {
 
 function resetState() {
   dismissed = false;
+  currentIntro = null;
   if (overlayReady) {
     setOverlayVisible(false);
     return;
@@ -114,6 +215,7 @@ event.on('iina.plugin-overlay-loaded', function () {
 event.on('mpv.file-loaded', function () {
   log('File loaded');
   resetState();
+  detectCurrentIntro();
   updateOverlay();
 });
 
