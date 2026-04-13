@@ -50,9 +50,11 @@ function normalizeChapterTitle(title) {
 function isIntroChapterTitle(title) {
   const normalized = normalizeChapterTitle(title);
   return (
+    /^studio logo(?:\s+\d+)?$/.test(normalized) ||
     /^op\s*\d*$/.test(normalized) ||
     /^opening(?:\s+\d+|\s+(?:theme|song|credits))?$/.test(normalized) ||
     normalized === 'intro' ||
+    normalized === 'title card' ||
     normalized === 'title sequence' ||
     normalized === 'main title' ||
     /^ncop\s*\d*$/.test(normalized) ||
