@@ -198,6 +198,7 @@
     <script>
       var boxWrap = document.getElementById('box-wrap');
       var box = document.getElementById('box');
+      var title = document.getElementById('title');
       var autoDismissPlaybackPaused = false;
 
       function setVisible(visible) {
@@ -215,6 +216,12 @@
 
       function setProgressIndicatorStyle(style) {
         box.dataset.progressStyle = style === 'bar' ? 'bar' : 'full';
+      }
+
+      function setSkipLabel(label) {
+        var resolvedLabel = typeof label === 'string' && label ? label : 'Skip Intro';
+        title.textContent = resolvedLabel;
+        box.setAttribute('aria-label', resolvedLabel);
       }
 
       function postMessage(name, payload) {
@@ -274,6 +281,7 @@
           setAutoDismissDuration(state.autoDismissMs);
           autoDismissPlaybackPaused = !!state.playbackPaused;
           setProgressIndicatorStyle(state.progressIndicatorStyle);
+          setSkipLabel(state.skipLabel);
           setVisible(true);
         });
       }

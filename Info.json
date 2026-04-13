@@ -9,7 +9,8 @@
   "entry": "main.js",
   "preferencesPage": "preferences.html",
   "preferenceDefaults": {
-    "progress_indicator_style": "full"
+    "progress_indicator_style": "full",
+    "detect_recaps": false
   },
   "permissions": ["video-overlay"]
 }
