@@ -9,6 +9,7 @@
   "entry": "main.js",
   "preferencesPage": "preferences.html",
   "preferenceDefaults": {
+    "intro_detection_mode": "safe",
     "progress_indicator_style": "full",
     "detect_recaps": false
   },

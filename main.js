@@ -7,8 +7,11 @@ const console = iina.console;
 
 const INTRO_PROMPT_LEAD_IN = 1;
 const INTRO_PROMPT_AUTO_DISMISS_MS = 10000;
+const PREF_INTRO_DETECTION_MODE = 'intro_detection_mode';
 const PREF_PROGRESS_INDICATOR_STYLE = 'progress_indicator_style';
 const PREF_DETECT_RECAPS = 'detect_recaps';
+const DETECTION_MODE_SAFE = 'safe';
+const DETECTION_MODE_BALANCED = 'balanced';
 const PROGRESS_INDICATOR_FULL = 'full';
 const PROGRESS_INDICATOR_BAR = 'bar';
 const SECTION_KIND_INTRO = 'intro';
@@ -117,9 +120,17 @@ function classifyChapterTitle(title) {
   return null;
 }
 
+function normalizeDetectionMode(value) {
+  return value === DETECTION_MODE_BALANCED ? DETECTION_MODE_BALANCED : DETECTION_MODE_SAFE;
+}
+
 function getDetectionOptions(options) {
+  const detectionMode = normalizeDetectionMode(options && options.detectionMode);
   return {
     detectRecaps: !!(options && options.detectRecaps),
+    detectTitleSections: true,
+    detectTimingSections: detectionMode === DETECTION_MODE_BALANCED,
+    detectionMode: detectionMode,
   };
 }
 
@@ -420,8 +431,12 @@ function groupConnectedSections(sections) {
 
 function detectSectionsFromChapters(chapters, duration, options) {
   const resolvedOptions = getDetectionOptions(options);
-  const titleSections = collectSectionsFromChapterTitles(chapters, duration, resolvedOptions) || [];
-  const timingSection = detectSectionFromChapterTiming(chapters, duration, resolvedOptions);
+  const titleSections = resolvedOptions.detectTitleSections
+    ? collectSectionsFromChapterTitles(chapters, duration, resolvedOptions) || []
+    : [];
+  const timingSection = resolvedOptions.detectTimingSections
+    ? detectSectionFromChapterTiming(chapters, duration, resolvedOptions)
+    : null;
 
   if (timingSection) {
     let overlapsExistingSection = false;
@@ -452,6 +467,19 @@ function getBooleanPreference(key, fallbackValue) {
     if (value === 'false') return false;
   }
   return fallbackValue;
+}
+
+function getStringPreference(key, fallbackValue) {
+  if (!preferences || typeof preferences.get !== 'function') {
+    return fallbackValue;
+  }
+
+  const value = preferences.get(key);
+  return typeof value === 'string' && value ? value : fallbackValue;
+}
+
+function getIntroDetectionMode() {
+  return normalizeDetectionMode(getStringPreference(PREF_INTRO_DETECTION_MODE, DETECTION_MODE_SAFE));
 }
 
 function isRecapDetectionEnabled() {
@@ -509,6 +537,7 @@ function detectCurrentSections() {
     const duration = getDuration();
     const chapters = core.getChapters();
     detectedSections = detectSectionsFromChapters(chapters, duration, {
+      detectionMode: getIntroDetectionMode(),
       detectRecaps: isRecapDetectionEnabled(),
     });
   } catch (error) {
