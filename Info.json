@@ -1,7 +1,7 @@
 {
   "name": "Skip Intro",
   "identifier": "com.pparanoiidd.skipintro",
-  "version": "0.1.1",
+  "version": "0.6.0",
   "author": {
     "name": "pparanoiidd"
   },
@@ -9,9 +9,11 @@
   "entry": "main.js",
   "preferencesPage": "preferences.html",
   "preferenceDefaults": {
-    "intro_detection_mode": "safe",
+    "detect_chapter_titles": true,
+    "detect_audio_matching": true,
+    "detect_chapter_timing": false,
     "progress_indicator_style": "full",
     "detect_recaps": false
   },
-  "permissions": ["video-overlay"]
+  "permissions": ["video-overlay", "file-system"]
 }
