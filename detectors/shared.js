@@ -1,0 +1,128 @@
+const SECTION_KIND_INTRO = 'intro';
+const SECTION_KIND_RECAP = 'recap';
+const SECTION_KIND_SECTION = 'section';
+const SECTION_SOURCE_TITLE = 'title';
+const SECTION_SOURCE_TIMING = 'timing';
+const SECTION_SOURCE_AUDIO_FINGERPRINT = 'audio-fingerprint';
+const SECTION_GROUP_MAX_GAP = 1;
+const INTRO_MAX_START_RATIO = 0.25;
+
+const RECAP_TITLES = {
+  recap: true,
+  'previously on': true,
+  'last time on': true,
+  'previous episode': true,
+  'story so far': true,
+  'episode recap': true,
+  'series recap': true,
+  digest: true,
+  summary: true,
+};
+
+function getChapterStart(chapter) {
+  if (!chapter) return null;
+  return typeof chapter.start === 'number' && isFinite(chapter.start) ? chapter.start : null;
+}
+
+function getChapterEnd(chapters, index, duration) {
+  if (!Array.isArray(chapters) || index < 0 || index >= chapters.length) return null;
+
+  const nextStart = index + 1 < chapters.length ? getChapterStart(chapters[index + 1]) : duration;
+  return typeof nextStart === 'number' && isFinite(nextStart) ? nextStart : null;
+}
+
+function normalizeChapterTitle(title) {
+  if (typeof title !== 'string') return '';
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s:;,.!?-]+|[\s:;,.!?-]+$/g, '');
+}
+
+function classifyChapterTitle(title) {
+  const normalized = normalizeChapterTitle(title);
+  if (!normalized) return null;
+
+  if (
+    /^studio logo(?:\s+\d+)?$/.test(normalized) ||
+    /^op\s*\d*$/.test(normalized) ||
+    /^opening(?:\s+\d+|\s+(?:theme|song|credits))?$/.test(normalized) ||
+    normalized === 'intro' ||
+    normalized === 'title card' ||
+    normalized === 'title sequence' ||
+    normalized === 'main title' ||
+    /^ncop\s*\d*$/.test(normalized) ||
+    /^non credit opening(?:\s+\d+)?$/.test(normalized)
+  ) {
+    return SECTION_KIND_INTRO;
+  }
+
+  if (RECAP_TITLES[normalized]) {
+    return SECTION_KIND_RECAP;
+  }
+
+  return null;
+}
+
+function getDetectionOptions(options) {
+  return {
+    detectRecaps: !!(options && options.detectRecaps),
+    detectTitleSections: !options || options.detectChapterTitles !== false,
+    detectTimingSections: !!(options && options.detectChapterTiming),
+  };
+}
+
+function isAllowedTitleKind(kind, options) {
+  return kind === SECTION_KIND_INTRO || (kind === SECTION_KIND_RECAP && !!options.detectRecaps);
+}
+
+function isSectionStartInRange(start, duration, maxStart) {
+  return start >= 0 && start <= maxStart && start <= duration * INTRO_MAX_START_RATIO;
+}
+
+function groupConnectedSections(sections) {
+  if (!Array.isArray(sections) || !sections.length) return [];
+
+  const sortedSections = sections.slice().sort(function (a, b) {
+    return a.start - b.start || a.end - b.end;
+  });
+
+  const groups = [];
+  for (let i = 0; i < sortedSections.length; i++) {
+    const section = sortedSections[i];
+    const currentGroup = groups.length ? groups[groups.length - 1] : null;
+
+    if (!currentGroup || section.start > currentGroup.end + SECTION_GROUP_MAX_GAP) {
+      groups.push({
+        id: 'section-' + (groups.length + 1),
+        start: section.start,
+        end: section.end,
+        sections: [section],
+      });
+      continue;
+    }
+
+    currentGroup.end = Math.max(currentGroup.end, section.end);
+    currentGroup.sections.push(section);
+  }
+
+  return groups;
+}
+
+module.exports = {
+  SECTION_KIND_INTRO: SECTION_KIND_INTRO,
+  SECTION_KIND_RECAP: SECTION_KIND_RECAP,
+  SECTION_KIND_SECTION: SECTION_KIND_SECTION,
+  SECTION_SOURCE_TITLE: SECTION_SOURCE_TITLE,
+  SECTION_SOURCE_TIMING: SECTION_SOURCE_TIMING,
+  SECTION_SOURCE_AUDIO_FINGERPRINT: SECTION_SOURCE_AUDIO_FINGERPRINT,
+  classifyChapterTitle: classifyChapterTitle,
+  getChapterStart: getChapterStart,
+  getChapterEnd: getChapterEnd,
+  getDetectionOptions: getDetectionOptions,
+  groupConnectedSections: groupConnectedSections,
+  isAllowedTitleKind: isAllowedTitleKind,
+  isSectionStartInRange: isSectionStartInRange,
+};
