@@ -104,6 +104,13 @@ function isChapterTimingDetectionEnabled() {
   return getBooleanPreference(PREF_DETECT_CHAPTER_TIMING, false);
 }
 
+function hasEnabledDetectionMethod(options) {
+  return !!(
+    options &&
+    (options.detectChapterTitles || options.detectAudioMatching || options.detectChapterTiming)
+  );
+}
+
 function getSectionTitles(sectionGroup) {
   if (!sectionGroup || !Array.isArray(sectionGroup.sections)) return [];
 
@@ -229,6 +236,14 @@ async function detectCurrentSections() {
     detectChapterTiming: isChapterTimingDetectionEnabled(),
     detectRecaps: isRecapDetectionEnabled(),
   };
+
+  if (!hasEnabledDetectionMethod(options)) {
+    detectedSections = [];
+    log('Skipping intro detection: all detection methods are disabled');
+    updateOverlay();
+    return;
+  }
+
   let chapters = [];
   let duration = null;
 
