@@ -1,5 +1,6 @@
 const SECTION_KIND_INTRO = 'intro';
 const SECTION_KIND_RECAP = 'recap';
+const SECTION_KIND_CREDITS = 'credits';
 const SECTION_KIND_SECTION = 'section';
 const SECTION_SOURCE_TITLE = 'title';
 const SECTION_SOURCE_TIMING = 'timing';
@@ -63,7 +64,36 @@ function classifyChapterTitle(title) {
     return SECTION_KIND_RECAP;
   }
 
+  if (
+    normalized === 'credits' ||
+    normalized === 'credit' ||
+    normalized === 'end credits' ||
+    normalized === 'ending credits' ||
+    normalized === 'closing credits' ||
+    normalized === 'final credits' ||
+    normalized === 'staff credits' ||
+    normalized === 'credits start' ||
+    /^credits?\s+\d+$/.test(normalized) ||
+    /^ed\s*\d*$/.test(normalized) ||
+    /^ending(?:\s+\d+|\s+(?:theme|song|credits))?$/.test(normalized) ||
+    normalized === 'clean ending' ||
+    normalized === 'textless ending' ||
+    /^nced\s*\d*$/.test(normalized) ||
+    /^nc\s+ed\s*\d*$/.test(normalized) ||
+    /^non credit ending(?:\s+\d+)?$/.test(normalized)
+  ) {
+    return SECTION_KIND_CREDITS;
+  }
+
   return null;
+}
+
+function isPlainIntroChapterTitle(title) {
+  return normalizeChapterTitle(title) === 'intro';
+}
+
+function isSpecificIntroChapterTitle(title) {
+  return classifyChapterTitle(title) === SECTION_KIND_INTRO && !isPlainIntroChapterTitle(title);
 }
 
 function getDetectionOptions(options) {
@@ -75,7 +105,11 @@ function getDetectionOptions(options) {
 }
 
 function isAllowedTitleKind(kind, options) {
-  return kind === SECTION_KIND_INTRO || (kind === SECTION_KIND_RECAP && !!options.detectRecaps);
+  return (
+    kind === SECTION_KIND_INTRO ||
+    kind === SECTION_KIND_CREDITS ||
+    (kind === SECTION_KIND_RECAP && !!options.detectRecaps)
+  );
 }
 
 function isSectionStartInRange(start, duration, maxStart) {
@@ -114,6 +148,7 @@ function groupConnectedSections(sections) {
 module.exports = {
   SECTION_KIND_INTRO: SECTION_KIND_INTRO,
   SECTION_KIND_RECAP: SECTION_KIND_RECAP,
+  SECTION_KIND_CREDITS: SECTION_KIND_CREDITS,
   SECTION_KIND_SECTION: SECTION_KIND_SECTION,
   SECTION_SOURCE_TITLE: SECTION_SOURCE_TITLE,
   SECTION_SOURCE_TIMING: SECTION_SOURCE_TIMING,
@@ -123,6 +158,9 @@ module.exports = {
   getChapterEnd: getChapterEnd,
   getDetectionOptions: getDetectionOptions,
   groupConnectedSections: groupConnectedSections,
+  isPlainIntroChapterTitle: isPlainIntroChapterTitle,
   isAllowedTitleKind: isAllowedTitleKind,
   isSectionStartInRange: isSectionStartInRange,
+  isSpecificIntroChapterTitle: isSpecificIntroChapterTitle,
+  normalizeChapterTitle: normalizeChapterTitle,
 };

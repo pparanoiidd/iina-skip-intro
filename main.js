@@ -8,6 +8,7 @@ const file = iina.file;
 const iinaUtils = iina.utils;
 
 const {
+  SECTION_KIND_CREDITS,
   SECTION_KIND_RECAP,
   SECTION_KIND_SECTION,
 } = require('./detectors/shared.js');
@@ -127,21 +128,23 @@ function getSectionSources(sectionGroup) {
 
 function getSkipLabel(sectionGroup) {
   if (!sectionGroup) return 'Skip Intro';
-  if (sectionGroup.sections.length > 1) return 'Skip Sections';
+  if (sectionGroup.sections.length > 1) return 'Skip Opening';
 
   const kind = sectionGroup.sections[0].kind;
+  if (kind === SECTION_KIND_CREDITS) return 'Skip Credits';
   if (kind === SECTION_KIND_RECAP) return 'Skip Recap';
-  if (kind === SECTION_KIND_SECTION) return 'Skip Section';
+  if (kind === SECTION_KIND_SECTION) return 'Skip Opening';
   return 'Skip Intro';
 }
 
 function getSectionDescription(sectionGroup) {
   if (!sectionGroup) return 'section';
-  if (sectionGroup.sections.length > 1) return 'sections';
+  if (sectionGroup.sections.length > 1) return 'opening';
 
   const kind = sectionGroup.sections[0].kind;
+  if (kind === SECTION_KIND_CREDITS) return 'credits';
   if (kind === SECTION_KIND_RECAP) return 'recap';
-  if (kind === SECTION_KIND_SECTION) return 'section';
+  if (kind === SECTION_KIND_SECTION) return 'opening';
   return 'intro';
 }
 
