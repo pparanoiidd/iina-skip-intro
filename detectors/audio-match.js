@@ -1,8 +1,8 @@
 const { SECTION_KIND_INTRO, SECTION_SOURCE_AUDIO_FINGERPRINT } = require('./shared.js');
 
-const AUDIO_MATCH_PLAYLIST_DELAY_MS = 1000; // Delay to allow playlist properties to update
+const AUDIO_MATCH_PLAYLIST_DELAY_MS = 700; // Delay to allow playlist properties to update
 const AUDIO_MATCH_MAX_REFERENCE_FILES = 4;
-const AUDIO_MATCH_HELPER_PATH = './vendor/intro-match/tools/iina-helper.js';
+const AUDIO_MATCH_HELPER_PATH = './vendor/audio-intro-match/iina-helper.mjs';
 const PLUGIN_PACKAGE_NAME = 'com.pparanoiidd.skipintro.iinaplugin';
 const PLUGIN_DEV_PACKAGE_NAME = 'com.pparanoiidd.skipintro.iinaplugin-dev';
 const MEDIA_FILE_EXTENSION_REGEX =

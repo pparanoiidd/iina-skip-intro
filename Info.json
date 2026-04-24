@@ -12,7 +12,6 @@
     "detect_chapter_titles": true,
     "detect_audio_matching": true,
     "detect_chapter_timing": false,
-    "progress_indicator_style": "full",
     "detect_recaps": false
   },
   "permissions": ["video-overlay", "file-system"]

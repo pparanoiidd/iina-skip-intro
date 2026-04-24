@@ -81,12 +81,6 @@
         pointer-events: none;
       }
 
-      #box[data-progress-style='bar']::before {
-        inset: auto 0 0;
-        height: 2px;
-        background: rgba(255, 255, 255, 0.34);
-      }
-
       /* Shine sweep layer */
       #box::after {
         content: '';
@@ -186,7 +180,6 @@
         id="box"
         aria-live="polite"
         data-clickable
-        data-progress-style="full"
         role="button"
         tabindex="0"
         aria-label="Skip Intro"
@@ -212,10 +205,6 @@
         }
 
         box.style.setProperty('--auto-dismiss-ms', milliseconds + 'ms');
-      }
-
-      function setProgressIndicatorStyle(style) {
-        box.dataset.progressStyle = style === 'bar' ? 'bar' : 'full';
       }
 
       function setSkipLabel(label) {
@@ -280,7 +269,6 @@
 
           setAutoDismissDuration(state.autoDismissMs);
           autoDismissPlaybackPaused = !!state.playbackPaused;
-          setProgressIndicatorStyle(state.progressIndicatorStyle);
           setSkipLabel(state.skipLabel);
           setVisible(true);
         });

@@ -24,10 +24,7 @@ const AUDIO_MATCH_MAX_DURATION = 90 * 60;
 const PREF_DETECT_CHAPTER_TITLES = 'detect_chapter_titles';
 const PREF_DETECT_AUDIO_MATCHING = 'detect_audio_matching';
 const PREF_DETECT_CHAPTER_TIMING = 'detect_chapter_timing';
-const PREF_PROGRESS_INDICATOR_STYLE = 'progress_indicator_style';
 const PREF_DETECT_RECAPS = 'detect_recaps';
-const PROGRESS_INDICATOR_FULL = 'full';
-const PROGRESS_INDICATOR_BAR = 'bar';
 
 let overlayReady = false;
 let overlayVisible = false;
@@ -243,15 +240,6 @@ async function detectCurrentSections() {
   updateOverlay();
 }
 
-function getProgressIndicatorStyle() {
-  if (!preferences || typeof preferences.get !== 'function') {
-    return PROGRESS_INDICATOR_FULL;
-  }
-
-  const style = preferences.get(PREF_PROGRESS_INDICATOR_STYLE);
-  return style === PROGRESS_INDICATOR_BAR ? PROGRESS_INDICATOR_BAR : PROGRESS_INDICATOR_FULL;
-}
-
 function isPlaybackPaused() {
   return !!(core.status && core.status.paused);
 }
@@ -306,7 +294,6 @@ function sendState(visible, sectionGroup) {
     visible: visible,
     autoDismissMs: INTRO_PROMPT_AUTO_DISMISS_MS,
     playbackPaused: isPlaybackPaused(),
-    progressIndicatorStyle: getProgressIndicatorStyle(),
     skipLabel: getSkipLabel(sectionGroup),
   });
 }
