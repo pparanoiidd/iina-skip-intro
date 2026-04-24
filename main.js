@@ -12,18 +12,15 @@ const {
   SECTION_KIND_RECAP,
   SECTION_KIND_SECTION,
 } = require('./detectors/shared.js');
-const {
-  detectSectionsFromChapterTitles,
-} = require('./detectors/chapter-title.js');
-const {
-  detectSectionsFromChapterTiming,
-} = require('./detectors/chapter-timing.js');
-const {
-  createAudioMatchDetector,
-} = require('./detectors/audio-match.js');
+const { detectSectionsFromChapterTitles } = require('./detectors/chapter-title.js');
+const { detectSectionsFromChapterTiming } = require('./detectors/chapter-timing.js');
+const { createAudioMatchDetector } = require('./detectors/audio-match.js');
 
 const INTRO_PROMPT_LEAD_IN = 1;
 const INTRO_PROMPT_AUTO_DISMISS_MS = 10000;
+const DURATION_READ_DELAY_MS = 100;
+const DETECTION_MIN_DURATION = 10 * 60;
+const AUDIO_MATCH_MAX_DURATION = 90 * 60;
 const PREF_DETECT_CHAPTER_TITLES = 'detect_chapter_titles';
 const PREF_DETECT_AUDIO_MATCHING = 'detect_audio_matching';
 const PREF_DETECT_CHAPTER_TIMING = 'detect_chapter_timing';
@@ -68,6 +65,14 @@ function getPosition() {
 function getDuration() {
   const duration = mpv.getNumber('duration');
   return typeof duration === 'number' && isFinite(duration) && duration > 0 ? duration : null;
+}
+
+function isDurationLongEnoughForDetection(duration) {
+  return typeof duration === 'number' && isFinite(duration) && duration >= DETECTION_MIN_DURATION;
+}
+
+function isDurationShortEnoughForAudioMatching(duration) {
+  return typeof duration === 'number' && isFinite(duration) && duration <= AUDIO_MATCH_MAX_DURATION;
 }
 
 function getBooleanPreference(key, fallbackValue) {
@@ -160,7 +165,19 @@ async function detectCurrentSections() {
   let duration = null;
 
   try {
+    await delay(DURATION_READ_DELAY_MS);
+    if (runId !== detectionRunId) return;
     duration = getDuration();
+    if (!isDurationLongEnoughForDetection(duration)) {
+      detectedSections = [];
+      log(
+        'Skipping intro detection: duration is unknown or below ' +
+          Math.round(DETECTION_MIN_DURATION / 60) +
+          ' minutes',
+      );
+      updateOverlay();
+      return;
+    }
     chapters = core.getChapters();
     detectedSections = detectSectionsFromChapterTitles(chapters, duration, options);
   } catch (error) {
@@ -170,7 +187,11 @@ async function detectCurrentSections() {
 
   if (runId !== detectionRunId) return;
 
-  if (!detectedSections.length && options.detectAudioMatching) {
+  if (
+    !detectedSections.length &&
+    options.detectAudioMatching &&
+    isDurationShortEnoughForAudioMatching(duration)
+  ) {
     try {
       const audioSectionGroup = await detectSectionFromAudioMatch();
       if (runId !== detectionRunId) return;
@@ -180,6 +201,12 @@ async function detectCurrentSections() {
       detectedSections = [];
       log('Audio intro detection failed: ' + error);
     }
+  } else if (!detectedSections.length && options.detectAudioMatching) {
+    log(
+      'Skipping audio intro detection: duration is above ' +
+        Math.round(AUDIO_MATCH_MAX_DURATION / 60) +
+        ' minutes',
+    );
   }
 
   if (!detectedSections.length) {
