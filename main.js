@@ -11,6 +11,7 @@ const {
   SECTION_KIND_CREDITS,
   SECTION_KIND_RECAP,
   SECTION_KIND_SECTION,
+  getChapterStart,
 } = require('./detectors/shared.js');
 const { detectSectionsFromChapterTitles } = require('./detectors/chapter-title.js');
 const { detectSectionsFromChapterTiming } = require('./detectors/chapter-timing.js');
@@ -21,6 +22,7 @@ const INTRO_PROMPT_AUTO_DISMISS_MS = 10000;
 const DURATION_READ_DELAY_MS = 100;
 const DETECTION_MIN_DURATION = 10 * 60;
 const AUDIO_MATCH_MAX_DURATION = 90 * 60;
+const AUDIO_MATCH_CHAPTER_SNAP_WINDOW = 3;
 const PREF_DETECT_CHAPTER_TITLES = 'detect_chapter_titles';
 const PREF_DETECT_AUDIO_MATCHING = 'detect_audio_matching';
 const PREF_DETECT_CHAPTER_TIMING = 'detect_chapter_timing';
@@ -150,6 +152,75 @@ function getSectionDescription(sectionGroup) {
   return 'intro';
 }
 
+function getNearestChapterStartInWindow(chapters, target, maxDistance) {
+  if (!Array.isArray(chapters) || typeof target !== 'number' || !isFinite(target)) return null;
+
+  let nearestStart = null;
+  let nearestDistance = null;
+  for (let i = 0; i < chapters.length; i++) {
+    const chapterStart = getChapterStart(chapters[i]);
+    if (chapterStart === null) continue;
+
+    const distance = Math.abs(chapterStart - target);
+    if (distance <= maxDistance && (nearestDistance === null || distance < nearestDistance)) {
+      nearestStart = chapterStart;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearestStart;
+}
+
+function snapAudioSectionGroupToChapters(sectionGroup, chapters) {
+  if (!sectionGroup || !Array.isArray(sectionGroup.sections) || !sectionGroup.sections.length) {
+    return sectionGroup;
+  }
+
+  const nearestStart = getNearestChapterStartInWindow(
+    chapters,
+    sectionGroup.start,
+    AUDIO_MATCH_CHAPTER_SNAP_WINDOW,
+  );
+  const nearestEnd = getNearestChapterStartInWindow(
+    chapters,
+    sectionGroup.end,
+    AUDIO_MATCH_CHAPTER_SNAP_WINDOW,
+  );
+  const snappedStart = nearestStart === null ? sectionGroup.start : nearestStart;
+  const snappedEnd = nearestEnd === null ? sectionGroup.end : nearestEnd;
+
+  if (snappedStart === sectionGroup.start && snappedEnd === sectionGroup.end) {
+    return sectionGroup;
+  }
+  if (snappedEnd <= snappedStart) {
+    return sectionGroup;
+  }
+
+  log(
+    'Snapped audio intro to chapter marker(s): ' +
+      sectionGroup.start.toFixed(2) +
+      's-' +
+      sectionGroup.end.toFixed(2) +
+      's -> ' +
+      snappedStart.toFixed(2) +
+      's-' +
+      snappedEnd.toFixed(2) +
+      's',
+  );
+
+  return Object.assign({}, sectionGroup, {
+    start: snappedStart,
+    end: snappedEnd,
+    sections: sectionGroup.sections.map(function (currentSection, index) {
+      if (index !== 0) return currentSection;
+      return Object.assign({}, currentSection, {
+        start: snappedStart,
+        end: snappedEnd,
+      });
+    }),
+  });
+}
+
 async function detectCurrentSections() {
   const runId = ++detectionRunId;
   const options = {
@@ -192,7 +263,9 @@ async function detectCurrentSections() {
     try {
       const audioSectionGroup = await detectSectionFromAudioMatch();
       if (runId !== detectionRunId) return;
-      detectedSections = audioSectionGroup ? [audioSectionGroup] : [];
+      detectedSections = audioSectionGroup
+        ? [snapAudioSectionGroupToChapters(audioSectionGroup, chapters)]
+        : [];
     } catch (error) {
       if (runId !== detectionRunId) return;
       detectedSections = [];
