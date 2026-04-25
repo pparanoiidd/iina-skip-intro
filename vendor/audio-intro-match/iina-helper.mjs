@@ -1314,6 +1314,11 @@ var RUN_GAP_FRAMES = 2;
 var CONSENSUS_TOLERANCE_SECONDS = 4;
 var DISTINCT_WINDOW_SECONDS = 8;
 var MAX_RUNS_PER_REFERENCE = 12;
+var SINGLE_REFERENCE_RUNS_PER_REFERENCE = 3;
+var SINGLE_REFERENCE_CANDIDATE_PENALTY = 6;
+var SINGLE_REFERENCE_CONSENSUS_SCORE = 0.25;
+var SINGLE_REFERENCE_RESCUE_MIN_SECONDS = 35;
+var SINGLE_REFERENCE_RESCUE_FULL_SECONDS = 80;
 var BOUNDARY_SEARCH_SECONDS = 6;
 var BOUNDARY_WINDOW_SECONDS = 2;
 var BOUNDARY_OUTWARD_SECONDS2 = 5;
@@ -1658,7 +1663,7 @@ function buildCandidateFromRuns(runs, totalRefs, minLen, maxLen) {
   const overlapRatio = duration > 0 ? overlap / duration : 0;
   const consistency = mean(runs.map((run) => run.consistency));
   const similarityScore = mean(runs.map((run) => run.meanSimilarity));
-  const consensusScore = totalRefs === 1 ? 0.75 : clamp(1 - (startSpread + endSpread) / Math.max(1, duration), 0, 1);
+  const consensusScore = totalRefs === 1 ? 0.75 : runs.length === 1 ? SINGLE_REFERENCE_CONSENSUS_SCORE : clamp(1 - (startSpread + endSpread) / Math.max(1, duration), 0, 1);
   const totalScore = duration * Math.max(0.02, similarityScore - 0.34 + consistency * 0.04) + overlap * 0.7 + consensusScore * 8 + referenceSupport * 5 - (startSpread + endSpread) * 0.3 - mainStart * 0.01;
   return {
     mainStart,
@@ -1671,6 +1676,8 @@ function buildCandidateFromRuns(runs, totalRefs, minLen, maxLen) {
     consistencyScore: consistency,
     consensusScore,
     referenceSupport,
+    totalReferences: totalRefs,
+    singleReferenceRescueScore: 0,
     startSpread,
     endSpread,
     boundaryScore: 0,
@@ -1715,6 +1722,25 @@ function chooseBestConsensusRun(seed, pair, selectedRuns, minLen, toleranceFrame
   }
   return bestRun;
 }
+function buildSingleReferenceCandidates(pairwiseRuns, minLen, maxLen) {
+  const candidates = [];
+  for (const pair of pairwiseRuns) {
+    for (const run of pair.runs.slice(0, SINGLE_REFERENCE_RUNS_PER_REFERENCE)) {
+      const candidate = buildCandidateFromRuns(
+        [{ ...run, refIndex: pair.refIndex }],
+        pairwiseRuns.length,
+        minLen,
+        maxLen
+      );
+      if (!candidate) {
+        continue;
+      }
+      candidate.totalScore -= SINGLE_REFERENCE_CANDIDATE_PENALTY;
+      candidates.push(candidate);
+    }
+  }
+  return candidates;
+}
 function buildConsensusCandidates(pairwiseRuns, minLen, maxLen) {
   if (pairwiseRuns.length === 1) {
     return pairwiseRuns[0].runs.map(
@@ -1751,24 +1777,7 @@ function buildConsensusCandidates(pairwiseRuns, minLen, maxLen) {
       candidates.push(candidate);
     }
   }
-  if (!candidates.length) {
-    for (const pair of pairwiseRuns) {
-      for (const run of pair.runs.slice(0, 3)) {
-        const fallback = buildCandidateFromRuns(
-          [{ ...run, refIndex: pair.refIndex }],
-          pairwiseRuns.length,
-          minLen,
-          maxLen
-        );
-        if (fallback) {
-          fallback.totalScore -= 8;
-          fallback.referenceSupport = 1 / pairwiseRuns.length;
-          fallback.consensusScore = 0.25;
-          candidates.push(fallback);
-        }
-      }
-    }
-  }
+  candidates.push(...buildSingleReferenceCandidates(pairwiseRuns, minLen, maxLen));
   candidates.sort(
     (a, b) => lexicographicDescending(
       [a.totalScore, a.duration, a.similarityScore, -a.mainStart],
@@ -2124,6 +2133,19 @@ function confidenceLabel(score) {
   }
   return "low";
 }
+function singleReferenceRescueConfidence(best, simConf, boundaryConf) {
+  if (best.refs.length !== 1 || best.totalReferences <= 1) {
+    return 0;
+  }
+  const durationSeconds = best.duration * FRAME_HOP_SECONDS2;
+  const durationConf = clamp(
+    (durationSeconds - SINGLE_REFERENCE_RESCUE_MIN_SECONDS) / (SINGLE_REFERENCE_RESCUE_FULL_SECONDS - SINGLE_REFERENCE_RESCUE_MIN_SECONDS),
+    0,
+    1
+  );
+  const qualityConf = Math.min(simConf, durationConf);
+  return qualityConf * (0.65 + boundaryConf * 0.35);
+}
 function computeConfidence(best, candidates) {
   let altGap = 0.12;
   for (let index = 1; index < candidates.length; index += 1) {
@@ -2134,16 +2156,24 @@ function computeConfidence(best, candidates) {
     }
   }
   const simConf = clamp((best.similarityScore - 0.42) / 0.2, 0, 1);
-  const supportConf = clamp((best.referenceSupport - 0.45) / 0.5, 0, 1);
   const overlapConf = clamp((best.overlapRatio - 0.3) / 0.45, 0, 1);
-  const consensusConf = clamp(best.consensusScore, 0, 1);
   const boundaryConf = clamp((best.boundaryScore - 0.02) / 0.18, 0, 1);
+  const singletonRescueConf = singleReferenceRescueConfidence(best, simConf, boundaryConf);
+  const supportConf = Math.max(
+    clamp((best.referenceSupport - 0.45) / 0.5, 0, 1),
+    singletonRescueConf * 0.85
+  );
+  const consensusConf = Math.max(
+    clamp(best.consensusScore, 0, 1),
+    singletonRescueConf * 0.7
+  );
   const gapConf = clamp((altGap - 1.5) / 8, 0, 1);
   const confidence = simConf * 0.35 + supportConf * 0.15 + overlapConf * 0.15 + consensusConf * 0.15 + boundaryConf * 0.1 + gapConf * 0.1;
   return {
     confidence,
     gap: altGap,
-    label: confidenceLabel(confidence)
+    label: confidenceLabel(confidence),
+    singletonRescue: singletonRescueConf
   };
 }
 function candidateSortKey(candidate) {
@@ -2167,6 +2197,7 @@ function selectBestCandidate(candidates) {
   best.confidenceScore = confidence.confidence;
   best.scoreGap = confidence.gap;
   best.confidenceLabel = confidence.label;
+  best.singleReferenceRescueScore = confidence.singletonRescue;
   return best;
 }
 function toInt16Array(bytes) {
@@ -2405,6 +2436,7 @@ function formatOutput(mainFile, refFiles, result, minConfidence) {
       consensus: round4(result.sharedAudio.consensusScore),
       boundary: round4(result.sharedAudio.boundaryScore),
       support: round4(result.sharedAudio.referenceSupport),
+      single_reference_rescue: round4(result.sharedAudio.singleReferenceRescueScore ?? 0),
       overlap: round4(result.sharedAudio.overlapRatio)
     },
     confidence: {

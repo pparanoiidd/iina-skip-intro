@@ -497,10 +497,6 @@ function createAudioMatchDetector(dependencies) {
     return -1;
   }
 
-  function sortByPlaylistOrder(a, b) {
-    return a.index - b.index;
-  }
-
   function sortByPlaylistDistance(currentIndex) {
     return function (a, b) {
       const aDistance = Math.abs(a.index - currentIndex);
@@ -510,6 +506,59 @@ function createAudioMatchDetector(dependencies) {
 
       return aDistance - bDistance || aPrevious - bPrevious || a.index - b.index;
     };
+  }
+
+  function sortByEpisodeOffset(currentEpisode) {
+    return function (a, b) {
+      const aOffset = a.parsed.episode - currentEpisode;
+      const bOffset = b.parsed.episode - currentEpisode;
+      const aDistance = Math.abs(aOffset);
+      const bDistance = Math.abs(bOffset);
+      const aSide = aOffset > 0 ? 0 : 1;
+      const bSide = bOffset > 0 ? 0 : 1;
+
+      return aDistance - bDistance || aSide - bSide || a.index - b.index;
+    };
+  }
+
+  function isSameSeasonReference(candidate, currentParsed) {
+    return (
+      candidate.parsed &&
+      !candidate.parsed.isSpecial &&
+      candidate.parsed.season === currentParsed.season &&
+      candidate.parsed.episode !== currentParsed.episode
+    );
+  }
+
+  function getSameSeasonEpisodeRun(candidates, currentIndex, itemCount, currentParsed) {
+    const candidateByIndex = Object.create(null);
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      if (isSameSeasonReference(candidate, currentParsed)) {
+        candidateByIndex[candidate.index] = candidate;
+      }
+    }
+
+    const run = [];
+    let previousEpisode = currentParsed.episode;
+    for (let previousIndex = currentIndex - 1; previousIndex >= 0; previousIndex--) {
+      const candidate = candidateByIndex[previousIndex];
+      if (!candidate) break;
+      if (candidate.parsed.episode >= previousEpisode) break;
+      run.push(candidate);
+      previousEpisode = candidate.parsed.episode;
+    }
+
+    let nextEpisode = currentParsed.episode;
+    for (let nextIndex = currentIndex + 1; nextIndex < itemCount; nextIndex++) {
+      const candidate = candidateByIndex[nextIndex];
+      if (!candidate) break;
+      if (candidate.parsed.episode <= nextEpisode) break;
+      run.push(candidate);
+      nextEpisode = candidate.parsed.episode;
+    }
+
+    return run;
   }
 
   function getAudioReferenceFiles(mainFile) {
@@ -540,22 +589,18 @@ function createAudioMatchDetector(dependencies) {
     let selected = [];
 
     if (currentParsed && !currentParsed.isSpecial) {
-      selected = candidates
-        .filter(function (candidate) {
-          return (
-            candidate.parsed &&
-            !candidate.parsed.isSpecial &&
-            candidate.parsed.season === currentParsed.season &&
-            candidate.parsed.episode !== currentParsed.episode
-          );
-        })
-        .sort(sortByPlaylistOrder);
+      selected = getSameSeasonEpisodeRun(
+        candidates,
+        currentIndex,
+        items.length,
+        currentParsed,
+      ).sort(sortByEpisodeOffset(currentParsed.episode));
       logAudio(
         'reference candidates: ' +
           candidates.length +
           ' usable, ' +
           selected.length +
-          ' same-season',
+          ' same-season in current episode run',
       );
     } else {
       selected = candidates.sort(sortByPlaylistDistance(currentIndex));
