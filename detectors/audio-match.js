@@ -8,11 +8,13 @@ const PLUGIN_DEV_PACKAGE_NAME = 'com.pparanoiidd.skipintro.iinaplugin-dev';
 const MEDIA_FILE_EXTENSION_REGEX =
   /\.(?:3g2|3gp|avi|flv|m2ts|m4v|mkv|mov|mp4|mpeg|mpg|ogm|ogv|rmvb|ts|webm|wmv)$/i;
 const BAD_REFERENCE_FILENAME_REGEX =
-  /(?:^|[\s._\-[\(])(?:sample|trailer|extras?|ncop|nced|oped|creditless|preview)(?:$|[\s._\-\]\)])/i;
+  /(?:^|[\s._\-[\(])(?:sample|trailer|extras?|ncop\d*|nced\d*|oped|creditless|preview)(?:$|[\s._\-\]\)])/i;
 const SEASON_EPISODE_REGEXES = [
   /(?:^|[\s._\-[\(])s(\d{1,2})[\s._\-\]\[]*(ep|sp|e|x)[\s._-]*(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i,
   /(?:^|[\s._\-[\(])(\d{1,2})x(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i,
 ];
+const STANDALONE_SPECIAL_EP_REGEX =
+  /(?:^|[\s._\-[\(])(?:sp|special|ova|oav|oad)[\s._-]*(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i;
 const SEASON_WORD_REGEX = /\b(?:season|saison|temporada|stagione|staffel|serie)[. _-]?(\d{1,2})\b/i;
 const SEASON_ONLY_REGEX = /(?:^|[\s._\-[\(])s(\d{1,2})(?!\d)(?=$|[\s._\-\]\)])/i;
 const SEASON_ORDINAL_PREFIX_REGEX =
@@ -357,6 +359,7 @@ function createAudioMatchDetector(dependencies) {
   function parseSeasonEpisode(path) {
     const text = getFilenameStem(path);
     if (!text) return null;
+    const standaloneSpecialEpisode = text.match(STANDALONE_SPECIAL_EP_REGEX);
 
     for (let i = 0; i < SEASON_EPISODE_REGEXES.length; i++) {
       const match = text.match(SEASON_EPISODE_REGEXES[i]);
@@ -370,13 +373,25 @@ function createAudioMatchDetector(dependencies) {
           season: season,
           episode: episode,
           index: match.index,
-          isSpecial: kind === 'sp',
+          isSpecial: season === 0 || kind === 'sp' || !!standaloneSpecialEpisode,
         };
       }
     }
 
     const seasonToken = findSeasonToken(text);
-    if (!seasonToken) return null;
+    if (!seasonToken) {
+      const specialEpisode = standaloneSpecialEpisode
+        ? parseIntOrNull(standaloneSpecialEpisode[1])
+        : null;
+      return Number.isFinite(specialEpisode)
+        ? {
+            season: null,
+            episode: specialEpisode,
+            index: standaloneSpecialEpisode.index,
+            isSpecial: true,
+          }
+        : null;
+    }
 
     let episode = null;
     let episodeIndex = Infinity;
@@ -409,8 +424,17 @@ function createAudioMatchDetector(dependencies) {
       season: seasonToken.season,
       episode: episode,
       index: Math.min(seasonToken.index, episodeIndex),
-      isSpecial: false,
+      isSpecial: seasonToken.season === 0,
     };
+  }
+
+  function formatParsedSeasonEpisode(parsed) {
+    if (!parsed) return '(unparsed)';
+
+    const label = Number.isFinite(parsed.season)
+      ? 'S' + parsed.season + 'E' + parsed.episode
+      : 'SP' + parsed.episode;
+    return label + (parsed.isSpecial ? ' special' : '');
   }
 
   function getPlaylistItemPath(item) {
@@ -578,13 +602,7 @@ function createAudioMatchDetector(dependencies) {
         ' item(s), current index ' +
         currentIndex +
         ', current ' +
-        (currentParsed
-          ? 'S' +
-            currentParsed.season +
-            'E' +
-            currentParsed.episode +
-            (currentParsed.isSpecial ? ' special' : '')
-          : '(unparsed)'),
+        formatParsedSeasonEpisode(currentParsed),
     );
     let selected = [];
 
