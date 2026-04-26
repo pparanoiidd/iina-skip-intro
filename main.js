@@ -448,6 +448,7 @@ function sendState(visible, sectionGroup) {
   currentOverlaySection = visible ? sectionGroup : null;
   overlay.postMessage('state', {
     visible: visible,
+    sectionId: sectionGroup ? sectionGroup.id : null,
     autoDismissMs: autoDismissSeconds * 1000,
     playbackPaused: isPlaybackPaused(),
     skipLabel: getSkipLabel(sectionGroup),

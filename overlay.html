@@ -15,26 +15,24 @@
       }
 
       body {
+        --overlay-edge-padding: clamp(2px, 1.5vw, 46px);
+
         display: flex;
         align-items: flex-end;
         justify-content: flex-end;
         box-sizing: border-box;
-        padding: clamp(2px, 1.5vw, 46px);
+        padding: var(--overlay-edge-padding);
       }
 
       /* ── wrapper ── */
       #box-wrap {
         position: relative;
-        opacity: 0;
         visibility: hidden;
         pointer-events: none;
-        transition:
-          opacity 100ms ease-out,
-          visibility 0s linear 300ms;
+        transition: visibility 0s linear 520ms;
       }
 
       #box-wrap.visible {
-        opacity: 1;
         visibility: visible;
         pointer-events: auto;
         transition-delay: 0s;
@@ -42,31 +40,33 @@
 
       /* ── main button ── */
       #box {
-        --auto-dismiss-ms: 10000ms;
+        --auto-dismiss-ms: 15000ms;
 
         position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        padding: 26px 32px;
+        padding: 22px 42px;
         border-radius: 12px;
 
-        color: rgba(255, 255, 255, 0.88);
-        background: rgba(34, 36, 40, 0.62);
-        -webkit-backdrop-filter: blur(32px) saturate(165%) contrast(0.9);
-        backdrop-filter: blur(32px) saturate(165%) contrast(0.9);
+        color: rgba(0, 0, 0, 0.86);
+        background: rgba(238, 238, 234, 0.82);
+        -webkit-backdrop-filter: blur(32px) saturate(145%) contrast(0.96);
+        backdrop-filter: blur(32px) saturate(145%) contrast(0.96);
         cursor: pointer;
         user-select: none;
 
-        transform: translateX(34px) scale(0.97);
+        transform: translateX(calc(100% + var(--overlay-edge-padding))) scale(0.97);
         transition:
           filter 140ms ease,
-          transform 360ms cubic-bezier(0.2, 0.9, 0.2, 1);
+          transform 520ms cubic-bezier(0.4, 0, 0.2, 1);
 
         box-shadow:
-          0 18px 44px rgba(0, 0, 0, 0.24),
-          inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+          0 28px 58px rgba(0, 0, 0, 0.36),
+          0 10px 24px rgba(0, 0, 0, 0.2),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.06);
       }
 
       /* Auto-dismiss progress layer */
@@ -75,47 +75,24 @@
         position: absolute;
         inset: 0;
         border-radius: inherit;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.96);
         opacity: 0;
         clip-path: inset(0 0 0 0);
-        pointer-events: none;
-      }
-
-      /* Shine sweep layer */
-      #box::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        background: linear-gradient(
-          105deg,
-          transparent 0%,
-          transparent 35%,
-          rgba(255, 255, 255, 0.25) 45%,
-          rgba(255, 255, 255, 0.5) 50%,
-          rgba(255, 255, 255, 0.25) 55%,
-          transparent 65%,
-          transparent 100%
-        );
-        background-size: 300% 100%;
-        background-position: 100% 0;
-        opacity: 0;
         pointer-events: none;
       }
 
       /* ── visible state ── */
       #box-wrap.visible #box {
         transform: translateX(0) scale(1);
-        animation: prompt-arrival 650ms cubic-bezier(0.16, 1, 0.3, 1);
+        transition:
+          filter 140ms ease,
+          transform 1000ms cubic-bezier(0.16, 1, 0.3, 1);
       }
 
       #box-wrap.visible #box::before {
         opacity: 1;
-        animation: auto-dismiss-progress var(--auto-dismiss-ms) linear forwards;
-      }
-
-      #box-wrap.visible #box::after {
-        animation: shine-sweep 600ms ease-in-out 100ms 1 forwards;
+        animation: var(--auto-dismiss-animation-name, auto-dismiss-progress) var(--auto-dismiss-ms)
+          linear forwards;
       }
 
       #box-wrap.auto-dismiss-paused #box::before {
@@ -123,48 +100,34 @@
       }
 
       #box-wrap.visible #box:hover {
-        filter: brightness(1.22);
+        filter: brightness(1.03) contrast(1.02);
       }
 
       /* ── title ── */
       #title {
         position: relative;
         z-index: 1;
-        color: rgba(255, 255, 255, 0.42);
+        color: rgba(0, 0, 0, 0.86);
         font-size: 22px;
-        font-weight: 600;
+        font-weight: 550;
         line-height: 1.2;
         letter-spacing: -0.01em;
-        mix-blend-mode: color-dodge;
         pointer-events: none;
       }
 
       /* ── keyframes ── */
 
-      /* Slide in from right */
-      @keyframes prompt-arrival {
-        0% {
-          transform: translateX(34px) scale(0.97);
-        }
-        100% {
-          transform: translateX(0) scale(1);
-        }
-      }
-
-      /* Light streak sweeping across the button */
-      @keyframes shine-sweep {
-        0% {
-          opacity: 1;
-          background-position: 0% 0;
-        }
-        100% {
-          opacity: 1;
-          background-position: 100% 0;
-        }
-      }
-
       /* Auto-dismiss countdown */
       @keyframes auto-dismiss-progress {
+        from {
+          clip-path: inset(0 0 0 0);
+        }
+        to {
+          clip-path: inset(0 100% 0 0);
+        }
+      }
+
+      @keyframes auto-dismiss-progress-reset {
         from {
           clip-path: inset(0 0 0 0);
         }
@@ -193,6 +156,8 @@
       var box = document.getElementById('box');
       var title = document.getElementById('title');
       var autoDismissPlaybackPaused = false;
+      var autoDismissAnimationReset = false;
+      var currentSectionId = null;
 
       function setVisible(visible) {
         boxWrap.classList.toggle('visible', !!visible);
@@ -211,6 +176,14 @@
         var resolvedLabel = typeof label === 'string' && label ? label : 'Skip Intro';
         title.textContent = resolvedLabel;
         box.setAttribute('aria-label', resolvedLabel);
+      }
+
+      function restartAutoDismissProgress() {
+        autoDismissAnimationReset = !autoDismissAnimationReset;
+        box.style.setProperty(
+          '--auto-dismiss-animation-name',
+          autoDismissAnimationReset ? 'auto-dismiss-progress-reset' : 'auto-dismiss-progress',
+        );
       }
 
       function postMessage(name, payload) {
@@ -245,7 +218,10 @@
       });
 
       box.addEventListener('animationend', function (event) {
-        if (event.animationName === 'auto-dismiss-progress') {
+        if (
+          event.animationName === 'auto-dismiss-progress' ||
+          event.animationName === 'auto-dismiss-progress-reset'
+        ) {
           postMessage('autoDismiss');
         }
       });
@@ -263,13 +239,23 @@
 
         iina.onMessage('state', function (state) {
           if (!state || !state.visible) {
+            currentSectionId = null;
             setVisible(false);
             return;
           }
 
+          var sectionChanged =
+            currentSectionId !== null &&
+            state.sectionId !== null &&
+            state.sectionId !== currentSectionId;
+
           setAutoDismissDuration(state.autoDismissMs);
           autoDismissPlaybackPaused = !!state.playbackPaused;
           setSkipLabel(state.skipLabel);
+          if (sectionChanged) {
+            restartAutoDismissProgress();
+          }
+          currentSectionId = state.sectionId;
           setVisible(true);
         });
       }
