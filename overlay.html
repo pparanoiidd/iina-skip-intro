@@ -41,6 +41,11 @@
       /* ── main button ── */
       #box {
         --auto-dismiss-ms: 15000ms;
+        --button-base-background: rgba(238, 238, 234, 0.82);
+        --button-progress-background: rgba(255, 255, 255, 0.96);
+        --button-text-color: rgba(0, 0, 0, 0.86);
+        --button-inset-outline: rgba(255, 255, 255, 0.72);
+        --button-inset-shadow: rgba(0, 0, 0, 0.06);
 
         position: relative;
         display: flex;
@@ -50,8 +55,8 @@
         padding: 22px 42px;
         border-radius: 12px;
 
-        color: rgba(0, 0, 0, 0.86);
-        background: rgba(238, 238, 234, 0.82);
+        color: var(--button-text-color);
+        background: var(--button-base-background);
         -webkit-backdrop-filter: blur(32px) saturate(145%) contrast(0.96);
         backdrop-filter: blur(32px) saturate(145%) contrast(0.96);
         cursor: pointer;
@@ -65,8 +70,16 @@
         box-shadow:
           0 28px 58px rgba(0, 0, 0, 0.36),
           0 10px 24px rgba(0, 0, 0, 0.2),
-          inset 0 0 0 1px rgba(255, 255, 255, 0.72),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+          inset 0 0 0 1px var(--button-inset-outline),
+          inset 0 -1px 0 var(--button-inset-shadow);
+      }
+
+      body.button-style-grey #box {
+        --button-base-background: rgba(66, 66, 64, 0.9);
+        --button-progress-background: rgba(88, 88, 85, 0.92);
+        --button-text-color: rgba(255, 255, 255, 0.94);
+        --button-inset-outline: rgba(255, 255, 255, 0.22);
+        --button-inset-shadow: rgba(0, 0, 0, 0.2);
       }
 
       /* Auto-dismiss progress layer */
@@ -75,7 +88,7 @@
         position: absolute;
         inset: 0;
         border-radius: inherit;
-        background: rgba(255, 255, 255, 0.96);
+        background: var(--button-progress-background);
         opacity: 0;
         clip-path: inset(0 0 0 0);
         pointer-events: none;
@@ -107,7 +120,7 @@
       #title {
         position: relative;
         z-index: 1;
-        color: rgba(0, 0, 0, 0.86);
+        color: inherit;
         font-size: 22px;
         font-weight: 550;
         line-height: 1.2;
@@ -176,6 +189,10 @@
         var resolvedLabel = typeof label === 'string' && label ? label : 'Skip Intro';
         title.textContent = resolvedLabel;
         box.setAttribute('aria-label', resolvedLabel);
+      }
+
+      function setButtonStyle(style) {
+        document.body.classList.toggle('button-style-grey', style === 'grey');
       }
 
       function restartAutoDismissProgress() {
@@ -252,6 +269,7 @@
           setAutoDismissDuration(state.autoDismissMs);
           autoDismissPlaybackPaused = !!state.playbackPaused;
           setSkipLabel(state.skipLabel);
+          setButtonStyle(state.buttonStyle);
           if (sectionChanged) {
             restartAutoDismissProgress();
           }

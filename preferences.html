@@ -79,6 +79,36 @@
         width: 44px;
       }
 
+      .hidden-preference-input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .button-style-toggle {
+        display: inline-flex;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid rgba(128, 128, 128, 0.38);
+        border-radius: 7px;
+      }
+
+      .button-style-toggle input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .button-style-toggle label {
+        padding: 2px 9px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .button-style-toggle input:checked + label {
+        background: rgba(128, 128, 128, 0.22);
+      }
+
       .detection-section:has(.detection-section__title input:not(:checked)) .detection-options {
         opacity: 0.45;
         pointer-events: none;
@@ -169,7 +199,7 @@
 
       <div class="section-divider" aria-hidden="true"></div>
 
-      <div>Skip behavior</div>
+      <div>Skip pop-up</div>
       <div class="global-options">
         <label class="global-option">
           <input
@@ -197,6 +227,28 @@
             <span>Leave this many seconds at the end when skipping</span>
           </span>
         </label>
+        <div class="global-option">
+          <input
+            id="popup-button-grey-preference"
+            class="hidden-preference-input"
+            type="checkbox"
+            data-pref-key="popup_button_grey"
+            data-type="bool"
+          />
+          <div
+            class="button-style-toggle"
+            role="radiogroup"
+            aria-label="Skip button style"
+          >
+            <input type="radio" id="popup-button-white" name="popup_button_style" value="white" />
+            <label for="popup-button-white">White</label>
+            <input type="radio" id="popup-button-grey" name="popup_button_style" value="grey" />
+            <label for="popup-button-grey">Grey</label>
+          </div>
+          <span class="detection-option__text">
+            <span>Skip button style</span>
+          </span>
+        </div>
       </div>
       <div class="preference-actions">
         <button type="button" id="reset-preferences">Reset to Defaults</button>
@@ -213,6 +265,7 @@
         detect_credits: true,
         popup_auto_dismiss_seconds: 15,
         skip_end_buffer_seconds: 1,
+        popup_button_grey: false,
       };
 
       function setPreference(key, value) {
@@ -239,6 +292,46 @@
         event.initEvent(eventName, true, true);
         input.dispatchEvent(event);
       }
+
+      function setPopupButtonGreyPreference(isGrey) {
+        const preferenceInput = document.getElementById('popup-button-grey-preference');
+        if (!preferenceInput) return;
+
+        preferenceInput.checked = !!isGrey;
+        setPreference('popup_button_grey', !!isGrey);
+        dispatchPreferenceEvent(preferenceInput, 'input');
+        dispatchPreferenceEvent(preferenceInput, 'change');
+      }
+
+      function syncPopupButtonStyleControl() {
+        const preferenceInput = document.getElementById('popup-button-grey-preference');
+        const whiteInput = document.getElementById('popup-button-white');
+        const greyInput = document.getElementById('popup-button-grey');
+        if (!preferenceInput || !whiteInput || !greyInput) return;
+
+        greyInput.checked = !!preferenceInput.checked;
+        whiteInput.checked = !preferenceInput.checked;
+      }
+
+      function initializePopupButtonStyleControl() {
+        const preferenceInput = document.getElementById('popup-button-grey-preference');
+        const whiteInput = document.getElementById('popup-button-white');
+        const greyInput = document.getElementById('popup-button-grey');
+        if (!preferenceInput || !whiteInput || !greyInput) return;
+
+        preferenceInput.addEventListener('change', syncPopupButtonStyleControl);
+        whiteInput.addEventListener('change', function () {
+          if (whiteInput.checked) setPopupButtonGreyPreference(false);
+        });
+        greyInput.addEventListener('change', function () {
+          if (greyInput.checked) setPopupButtonGreyPreference(true);
+        });
+
+        syncPopupButtonStyleControl();
+        setTimeout(syncPopupButtonStyleControl, 0);
+      }
+
+      initializePopupButtonStyleControl();
 
       document.getElementById('reset-preferences').addEventListener('click', function () {
         Object.keys(preferenceDefaults).forEach(function (key) {

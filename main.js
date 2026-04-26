@@ -37,6 +37,7 @@ const PREF_DETECT_RECAPS = 'detect_recaps';
 const PREF_DETECT_CREDITS = 'detect_credits';
 const PREF_POPUP_AUTO_DISMISS_SECONDS = 'popup_auto_dismiss_seconds';
 const PREF_SKIP_END_BUFFER_SECONDS = 'skip_end_buffer_seconds';
+const PREF_POPUP_BUTTON_GREY = 'popup_button_grey';
 
 let overlayReady = false;
 let overlayVisible = false;
@@ -158,6 +159,10 @@ function getSkipEndBufferSeconds() {
     SKIP_END_MIN_BUFFER_SECONDS,
     SKIP_END_MAX_BUFFER_SECONDS,
   );
+}
+
+function getPopupButtonStyle() {
+  return getBooleanPreference(PREF_POPUP_BUTTON_GREY, false) ? 'grey' : 'white';
 }
 
 function hasEnabledDetectionMethod(options) {
@@ -452,6 +457,7 @@ function sendState(visible, sectionGroup) {
     autoDismissMs: autoDismissSeconds * 1000,
     playbackPaused: isPlaybackPaused(),
     skipLabel: getSkipLabel(sectionGroup),
+    buttonStyle: getPopupButtonStyle(),
   });
 }
 
