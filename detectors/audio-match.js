@@ -483,7 +483,7 @@ function createAudioMatchDetector(dependencies) {
     return items;
   }
 
-  function buildPlaylistReferenceCandidates(items, currentIndex) {
+  function buildPlaylistReferenceCandidates(items, currentIndex, shouldParseEpisodeNumbers) {
     const candidates = [];
     for (let i = 0; i < items.length; i++) {
       const path = getPlaylistItemPath(items[i]);
@@ -491,7 +491,7 @@ function createAudioMatchDetector(dependencies) {
         continue;
       }
 
-      const parsed = parseSeasonEpisode(path);
+      const parsed = shouldParseEpisodeNumbers ? parseSeasonEpisode(path) : null;
       candidates.push({
         index: i,
         path: getLocalFilePath(path),
@@ -585,7 +585,11 @@ function createAudioMatchDetector(dependencies) {
     return run;
   }
 
-  function getAudioReferenceFiles(mainFile) {
+  function shouldParseEpisodeNumbers(options) {
+    return !options || options.parseAudioMatchEpisodeNumbers !== false;
+  }
+
+  function getAudioReferenceFiles(mainFile, options) {
     const items = getPlaylistItems();
     const currentIndex = getCurrentPlaylistIndex(items, mainFile);
     if (currentIndex < 0) {
@@ -594,15 +598,16 @@ function createAudioMatchDetector(dependencies) {
     }
 
     const currentPath = getPlaylistItemPath(items[currentIndex]) || mainFile;
-    const currentParsed = parseSeasonEpisode(currentPath);
-    const candidates = buildPlaylistReferenceCandidates(items, currentIndex);
+    const parseEpisodeNumbers = shouldParseEpisodeNumbers(options);
+    const currentParsed = parseEpisodeNumbers ? parseSeasonEpisode(currentPath) : null;
+    const candidates = buildPlaylistReferenceCandidates(items, currentIndex, parseEpisodeNumbers);
     logAudio(
       'playlist scan: ' +
         items.length +
         ' item(s), current index ' +
         currentIndex +
         ', current ' +
-        formatParsedSeasonEpisode(currentParsed),
+        (parseEpisodeNumbers ? formatParsedSeasonEpisode(currentParsed) : 'playlist-order only'),
     );
     let selected = [];
 
@@ -677,12 +682,12 @@ function createAudioMatchDetector(dependencies) {
     };
   }
 
-  async function detectSectionFromAudioMatch() {
+  async function detectSectionFromAudioMatch(options) {
     logAudio('waiting ' + AUDIO_MATCH_PLAYLIST_DELAY_MS + 'ms before reading playlist');
     await delay(AUDIO_MATCH_PLAYLIST_DELAY_MS);
 
     const mainFile = getCurrentMediaFile();
-    const referenceFiles = getAudioReferenceFiles(mainFile);
+    const referenceFiles = getAudioReferenceFiles(mainFile, options);
 
     if (!mainFile || !Array.isArray(referenceFiles) || !referenceFiles.length) {
       logAudio('skipped: missing current file or reference files');

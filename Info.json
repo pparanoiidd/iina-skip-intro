@@ -10,9 +10,14 @@
   "preferencesPage": "preferences.html",
   "preferenceDefaults": {
     "detect_chapter_titles": true,
+    "detect_intros": true,
     "detect_audio_matching": true,
+    "audio_match_parse_episode_numbers": true,
     "detect_chapter_timing": false,
-    "detect_recaps": false
+    "detect_recaps": false,
+    "detect_credits": true,
+    "popup_auto_dismiss_seconds": 15,
+    "skip_end_buffer_seconds": 1
   },
   "permissions": ["video-overlay", "file-system"]
 }

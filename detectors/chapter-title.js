@@ -5,7 +5,6 @@ const {
   classifyChapterTitle,
   getChapterStart,
   getDetectionOptions,
-  groupConnectedSections,
   isAllowedTitleKind,
   isPlainIntroChapterTitle,
   isSectionStartInRange,
@@ -22,7 +21,7 @@ const CREDITS_MIN_RUNTIME = 15 * 60;
 const CREDITS_MAX_RUNTIME = 3 * 60 * 60;
 const CREDITS_MIN_END_DISTANCE = 3 * 60;
 const CREDITS_MAX_END_DISTANCE = 15 * 60;
-const CREDITS_MIN_MAX_DURATION = 30;
+const CREDITS_MIN_MAX_DURATION = 2.5 * 60;
 const CREDITS_MAX_MAX_DURATION = 14 * 60;
 
 function clamp(value, min, max) {
@@ -98,28 +97,13 @@ function collectSectionsFromChapterTitles(chapters, duration, options) {
       continue;
     }
 
-    let endChapterIndex = i + 1;
     const titles = [chapters[i].title || ''];
-    while (
-      endChapterIndex < chapters.length &&
-      classifyChapterTitle(chapters[endChapterIndex].title) === kind
-    ) {
-      titles.push(chapters[endChapterIndex].title || '');
-      endChapterIndex++;
-    }
-
     const start = getChapterStart(chapters[i]);
-    const end =
-      endChapterIndex < chapters.length ? getChapterStart(chapters[endChapterIndex]) : duration;
+    const end = i + 1 < chapters.length ? getChapterStart(chapters[i + 1]) : duration;
     const isValid =
       kind === SECTION_KIND_CREDITS
         ? isValidCreditsTitleSection(start, end, duration)
-        : isValidTitleSection(
-            start,
-            endChapterIndex < chapters.length ? end : null,
-            duration,
-            titles.length,
-          );
+        : isValidTitleSection(start, i + 1 < chapters.length ? end : null, duration, titles.length);
 
     if (isValid) {
       sections.push({
@@ -131,10 +115,23 @@ function collectSectionsFromChapterTitles(chapters, duration, options) {
       });
     }
 
-    i = endChapterIndex;
+    i++;
   }
 
   return sections;
+}
+
+function createStandaloneSectionGroups(sections) {
+  if (!Array.isArray(sections) || !sections.length) return [];
+
+  return sections.map(function (section, index) {
+    return {
+      id: 'section-' + (index + 1),
+      start: section.start,
+      end: section.end,
+      sections: [section],
+    };
+  });
 }
 
 function detectSectionsFromChapterTitles(chapters, duration, options) {
@@ -143,7 +140,7 @@ function detectSectionsFromChapterTitles(chapters, duration, options) {
     ? collectSectionsFromChapterTitles(chapters, duration, resolvedOptions) || []
     : [];
 
-  return groupConnectedSections(titleSections);
+  return createStandaloneSectionGroups(titleSections);
 }
 
 module.exports = {

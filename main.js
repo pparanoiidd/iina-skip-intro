@@ -18,15 +18,25 @@ const { detectSectionsFromChapterTiming } = require('./detectors/chapter-timing.
 const { createAudioMatchDetector } = require('./detectors/audio-match.js');
 
 const INTRO_PROMPT_LEAD_IN = 1;
-const INTRO_PROMPT_AUTO_DISMISS_MS = 10000;
+const INTRO_PROMPT_AUTO_DISMISS_SECONDS = 15;
+const INTRO_PROMPT_MIN_AUTO_DISMISS_SECONDS = 1;
+const INTRO_PROMPT_MAX_AUTO_DISMISS_SECONDS = 60;
+const SKIP_END_BUFFER_SECONDS = 1;
+const SKIP_END_MIN_BUFFER_SECONDS = 0;
+const SKIP_END_MAX_BUFFER_SECONDS = 10;
 const DURATION_READ_DELAY_MS = 100;
 const DETECTION_MIN_DURATION = 10 * 60;
 const AUDIO_MATCH_MAX_DURATION = 90 * 60;
 const AUDIO_MATCH_CHAPTER_SNAP_WINDOW = 3;
 const PREF_DETECT_CHAPTER_TITLES = 'detect_chapter_titles';
+const PREF_DETECT_INTROS = 'detect_intros';
 const PREF_DETECT_AUDIO_MATCHING = 'detect_audio_matching';
+const PREF_AUDIO_MATCH_PARSE_EPISODE_NUMBERS = 'audio_match_parse_episode_numbers';
 const PREF_DETECT_CHAPTER_TIMING = 'detect_chapter_timing';
 const PREF_DETECT_RECAPS = 'detect_recaps';
+const PREF_DETECT_CREDITS = 'detect_credits';
+const PREF_POPUP_AUTO_DISMISS_SECONDS = 'popup_auto_dismiss_seconds';
+const PREF_SKIP_END_BUFFER_SECONDS = 'skip_end_buffer_seconds';
 
 let overlayReady = false;
 let overlayVisible = false;
@@ -88,8 +98,34 @@ function getBooleanPreference(key, fallbackValue) {
   return fallbackValue;
 }
 
+function getNumberPreference(key, fallbackValue) {
+  if (!preferences || typeof preferences.get !== 'function') {
+    return fallbackValue;
+  }
+
+  const value = preferences.get(key);
+  if (typeof value === 'number' && isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    if (isFinite(parsed)) return parsed;
+  }
+  return fallbackValue;
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function isRecapDetectionEnabled() {
   return getBooleanPreference(PREF_DETECT_RECAPS, false);
+}
+
+function isIntroDetectionEnabled() {
+  return getBooleanPreference(PREF_DETECT_INTROS, true);
+}
+
+function isCreditDetectionEnabled() {
+  return getBooleanPreference(PREF_DETECT_CREDITS, true);
 }
 
 function isChapterTitleDetectionEnabled() {
@@ -100,14 +136,37 @@ function isAudioMatchingEnabled() {
   return getBooleanPreference(PREF_DETECT_AUDIO_MATCHING, true);
 }
 
+function isAudioMatchEpisodeParsingEnabled() {
+  return getBooleanPreference(PREF_AUDIO_MATCH_PARSE_EPISODE_NUMBERS, true);
+}
+
 function isChapterTimingDetectionEnabled() {
   return getBooleanPreference(PREF_DETECT_CHAPTER_TIMING, false);
+}
+
+function getPopupAutoDismissSeconds() {
+  return clampNumber(
+    getNumberPreference(PREF_POPUP_AUTO_DISMISS_SECONDS, INTRO_PROMPT_AUTO_DISMISS_SECONDS),
+    INTRO_PROMPT_MIN_AUTO_DISMISS_SECONDS,
+    INTRO_PROMPT_MAX_AUTO_DISMISS_SECONDS,
+  );
+}
+
+function getSkipEndBufferSeconds() {
+  return clampNumber(
+    getNumberPreference(PREF_SKIP_END_BUFFER_SECONDS, SKIP_END_BUFFER_SECONDS),
+    SKIP_END_MIN_BUFFER_SECONDS,
+    SKIP_END_MAX_BUFFER_SECONDS,
+  );
 }
 
 function hasEnabledDetectionMethod(options) {
   return !!(
     options &&
-    (options.detectChapterTitles || options.detectAudioMatching || options.detectChapterTiming)
+    ((options.detectChapterTitles &&
+      (options.detectIntros || options.detectRecaps || options.detectCredits)) ||
+      options.detectAudioMatching ||
+      options.detectChapterTiming)
   );
 }
 
@@ -233,8 +292,11 @@ async function detectCurrentSections() {
   const options = {
     detectChapterTitles: isChapterTitleDetectionEnabled(),
     detectAudioMatching: isAudioMatchingEnabled(),
+    parseAudioMatchEpisodeNumbers: isAudioMatchEpisodeParsingEnabled(),
     detectChapterTiming: isChapterTimingDetectionEnabled(),
+    detectIntros: isIntroDetectionEnabled(),
     detectRecaps: isRecapDetectionEnabled(),
+    detectCredits: isCreditDetectionEnabled(),
   };
 
   if (!hasEnabledDetectionMethod(options)) {
@@ -276,7 +338,7 @@ async function detectCurrentSections() {
     isDurationShortEnoughForAudioMatching(duration)
   ) {
     try {
-      const audioSectionGroup = await detectSectionFromAudioMatch();
+      const audioSectionGroup = await detectSectionFromAudioMatch(options);
       if (runId !== detectionRunId) return;
       detectedSections = audioSectionGroup
         ? [snapAudioSectionGroupToChapters(audioSectionGroup, chapters)]
@@ -350,15 +412,20 @@ function registerHandlers() {
       return;
     }
 
-    log('Skip requested - seeking to ' + currentOverlaySection.end.toFixed(2) + 's');
-    core.seekTo(currentOverlaySection.end);
+    const bufferSeconds = getSkipEndBufferSeconds();
+    const seekTarget = Math.max(
+      currentOverlaySection.start,
+      currentOverlaySection.end - bufferSeconds,
+    );
+    log('Skip requested - seeking to ' + seekTarget.toFixed(2) + 's');
+    core.seekTo(seekTarget);
     dismissOverlay();
   });
 
   overlay.onMessage('autoDismiss', function () {
     if (!overlayVisible || !currentOverlaySection) return;
 
-    log('Auto dismissed after ' + INTRO_PROMPT_AUTO_DISMISS_MS / 1000 + 's');
+    log('Auto dismissed after ' + getPopupAutoDismissSeconds() + 's');
     dismissOverlay();
   });
 
@@ -376,11 +443,12 @@ function initializeOverlay() {
 }
 
 function sendState(visible, sectionGroup) {
+  const autoDismissSeconds = getPopupAutoDismissSeconds();
   overlayVisible = visible;
   currentOverlaySection = visible ? sectionGroup : null;
   overlay.postMessage('state', {
     visible: visible,
-    autoDismissMs: INTRO_PROMPT_AUTO_DISMISS_MS,
+    autoDismissMs: autoDismissSeconds * 1000,
     playbackPaused: isPlaybackPaused(),
     skipLabel: getSkipLabel(sectionGroup),
   });

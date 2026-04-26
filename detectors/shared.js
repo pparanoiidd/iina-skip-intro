@@ -75,7 +75,7 @@ function classifyChapterTitle(title) {
     normalized === 'credits start' ||
     /^credits?\s+\d+$/.test(normalized) ||
     /^ed\s*\d*$/.test(normalized) ||
-    /^ending(?:\s+\d+|\s+(?:theme|song|credits))?$/.test(normalized) ||
+    /^ending(?:\s+\d+|\s+(?:theme|song|credits))$/.test(normalized) ||
     normalized === 'clean ending' ||
     normalized === 'textless ending' ||
     /^nced\s*\d*$/.test(normalized) ||
@@ -98,7 +98,9 @@ function isSpecificIntroChapterTitle(title) {
 
 function getDetectionOptions(options) {
   return {
+    detectIntros: !options || options.detectIntros !== false,
     detectRecaps: !!(options && options.detectRecaps),
+    detectCredits: !options || options.detectCredits !== false,
     detectTitleSections: !options || options.detectChapterTitles !== false,
     detectTimingSections: !!(options && options.detectChapterTiming),
   };
@@ -106,8 +108,8 @@ function getDetectionOptions(options) {
 
 function isAllowedTitleKind(kind, options) {
   return (
-    kind === SECTION_KIND_INTRO ||
-    kind === SECTION_KIND_CREDITS ||
+    (kind === SECTION_KIND_INTRO && !!options.detectIntros) ||
+    (kind === SECTION_KIND_CREDITS && !!options.detectCredits) ||
     (kind === SECTION_KIND_RECAP && !!options.detectRecaps)
   );
 }
