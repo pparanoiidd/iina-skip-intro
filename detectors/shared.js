@@ -7,6 +7,36 @@ const SECTION_SOURCE_TIMING = 'timing';
 const SECTION_SOURCE_AUDIO_FINGERPRINT = 'audio-fingerprint';
 const SECTION_GROUP_MAX_GAP = 1;
 const INTRO_MAX_START_RATIO = 0.25;
+const VIDEO_FILE_EXTENSIONS = Object.freeze([
+  'mkv',
+  'mp4',
+  'avi',
+  'm4v',
+  'mov',
+  '3gp',
+  'ts',
+  'mts',
+  'm2ts',
+  'wmv',
+  'flv',
+  'f4v',
+  'asf',
+  'webm',
+  'rm',
+  'rmvb',
+  'qt',
+  'dv',
+  'mpg',
+  'mpeg',
+  'mxf',
+  'vob',
+  'ogv',
+  'ogm',
+]);
+const VIDEO_FILE_EXTENSION_MAP = VIDEO_FILE_EXTENSIONS.reduce(function (map, extension) {
+  map[extension] = true;
+  return map;
+}, Object.create(null));
 
 const RECAP_TITLES = {
   recap: true,
@@ -19,6 +49,41 @@ const RECAP_TITLES = {
   digest: true,
   summary: true,
 };
+
+function getLocalFilePath(value) {
+  if (!value) return null;
+
+  if (/^file:\/\//i.test(value)) {
+    const withoutScheme = value.replace(/^file:\/\/(?:localhost)?/i, '');
+    try {
+      return decodeURI(withoutScheme);
+    } catch (error) {
+      return withoutScheme;
+    }
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function getFilename(path) {
+  const localPath = getLocalFilePath(path);
+  if (!localPath) return '';
+
+  const parts = localPath.split(/[\\/]/);
+  return parts.length ? parts[parts.length - 1] : localPath;
+}
+
+function isVideoFilePath(path) {
+  const filename = getFilename(path);
+  if (!filename) return false;
+
+  const extensionMatch = filename.match(/\.([^.]+)$/);
+  return !!(extensionMatch && VIDEO_FILE_EXTENSION_MAP[extensionMatch[1].toLowerCase()]);
+}
 
 function getChapterStart(chapter) {
   if (!chapter) return null;
@@ -156,13 +221,16 @@ module.exports = {
   SECTION_SOURCE_TIMING: SECTION_SOURCE_TIMING,
   SECTION_SOURCE_AUDIO_FINGERPRINT: SECTION_SOURCE_AUDIO_FINGERPRINT,
   classifyChapterTitle: classifyChapterTitle,
+  getFilename: getFilename,
   getChapterStart: getChapterStart,
   getChapterEnd: getChapterEnd,
   getDetectionOptions: getDetectionOptions,
+  getLocalFilePath: getLocalFilePath,
   groupConnectedSections: groupConnectedSections,
   isPlainIntroChapterTitle: isPlainIntroChapterTitle,
   isAllowedTitleKind: isAllowedTitleKind,
   isSectionStartInRange: isSectionStartInRange,
   isSpecificIntroChapterTitle: isSpecificIntroChapterTitle,
+  isVideoFilePath: isVideoFilePath,
   normalizeChapterTitle: normalizeChapterTitle,
 };

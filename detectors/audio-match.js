@@ -1,12 +1,16 @@
-const { SECTION_KIND_INTRO, SECTION_SOURCE_AUDIO_FINGERPRINT } = require('./shared.js');
+const {
+  SECTION_KIND_INTRO,
+  SECTION_SOURCE_AUDIO_FINGERPRINT,
+  getFilename,
+  getLocalFilePath,
+  isVideoFilePath,
+} = require('./shared.js');
 
-const AUDIO_MATCH_PLAYLIST_DELAY_MS = 700; // Delay to allow playlist properties to update
+const AUDIO_MATCH_PLAYLIST_DELAY_MS = 500; // Delay to allow playlist properties to update
 const AUDIO_MATCH_MAX_REFERENCE_FILES = 4;
 const AUDIO_MATCH_HELPER_PATH = './vendor/audio-intro-match/iina-helper.mjs';
 const PLUGIN_PACKAGE_NAME = 'com.pparanoiidd.skipintro.iinaplugin';
 const PLUGIN_DEV_PACKAGE_NAME = 'com.pparanoiidd.skipintro.iinaplugin-dev';
-const MEDIA_FILE_EXTENSION_REGEX =
-  /\.(?:3g2|3gp|avi|flv|m2ts|m4v|mkv|mov|mp4|mpeg|mpg|ogm|ogv|rmvb|ts|webm|wmv)$/i;
 const BAD_REFERENCE_FILENAME_REGEX =
   /(?:^|[\s._\-[\(])(?:sample|trailer|extras?|ncop\d*|nced\d*|oped|creditless|preview)(?:$|[\s._\-\]\)])/i;
 const SEASON_EPISODE_REGEXES = [
@@ -249,37 +253,10 @@ function createAudioMatchDetector(dependencies) {
     return localPath;
   }
 
-  function getLocalFilePath(value) {
-    if (!value) return null;
-
-    if (/^file:\/\//i.test(value)) {
-      const withoutScheme = value.replace(/^file:\/\/(?:localhost)?/i, '');
-      try {
-        return decodeURI(withoutScheme);
-      } catch (error) {
-        return withoutScheme;
-      }
-    }
-
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
-      return null;
-    }
-
-    return value;
-  }
-
   function normalizeComparablePath(value) {
     const localPath = getLocalFilePath(value);
     if (!localPath) return null;
     return localPath.replace(/\/+$/, '').toLowerCase();
-  }
-
-  function getFilename(path) {
-    const localPath = getLocalFilePath(path);
-    if (!localPath) return '';
-
-    const parts = localPath.split(/[\\/]/);
-    return parts.length ? parts[parts.length - 1] : localPath;
   }
 
   function getFilenameStem(path) {
@@ -287,8 +264,7 @@ function createAudioMatchDetector(dependencies) {
   }
 
   function isPlayableLocalMedia(path) {
-    const localPath = getLocalFilePath(path);
-    return !!(localPath && MEDIA_FILE_EXTENSION_REGEX.test(localPath));
+    return isVideoFilePath(path);
   }
 
   function isBadReferenceFilename(path) {

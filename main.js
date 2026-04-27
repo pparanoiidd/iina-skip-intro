@@ -11,7 +11,9 @@ const {
   SECTION_KIND_CREDITS,
   SECTION_KIND_RECAP,
   SECTION_KIND_SECTION,
+  getLocalFilePath,
   getChapterStart,
+  isVideoFilePath,
 } = require('./detectors/shared.js');
 const { detectSectionsFromChapterTitles } = require('./detectors/chapter-title.js');
 const { detectSectionsFromChapterTiming } = require('./detectors/chapter-timing.js');
@@ -24,7 +26,7 @@ const INTRO_PROMPT_MAX_AUTO_DISMISS_SECONDS = 60;
 const SKIP_END_BUFFER_SECONDS = 1;
 const SKIP_END_MIN_BUFFER_SECONDS = 0;
 const SKIP_END_MAX_BUFFER_SECONDS = 10;
-const DURATION_READ_DELAY_MS = 100;
+const DURATION_READ_DELAY_MS = 500;
 const DETECTION_MIN_DURATION = 10 * 60;
 const AUDIO_MATCH_MAX_DURATION = 90 * 60;
 const AUDIO_MATCH_CHAPTER_SNAP_WINDOW = 3;
@@ -75,6 +77,15 @@ function getPosition() {
 function getDuration() {
   const duration = mpv.getNumber('duration');
   return typeof duration === 'number' && isFinite(duration) && duration > 0 ? duration : null;
+}
+
+function getCurrentMediaPath() {
+  try {
+    const path = mpv.getString('path');
+    return typeof path === 'string' && path ? getLocalFilePath(path) || path : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 function isDurationLongEnoughForDetection(duration) {
@@ -317,6 +328,14 @@ async function detectCurrentSections() {
   try {
     await delay(DURATION_READ_DELAY_MS);
     if (runId !== detectionRunId) return;
+    const currentPath = getCurrentMediaPath();
+    if (!isVideoFilePath(currentPath)) {
+      detectedSections = [];
+      log('Skipping intro detection: current file is not a supported video file');
+      updateOverlay();
+      return;
+    }
+
     duration = getDuration();
     if (!isDurationLongEnoughForDetection(duration)) {
       detectedSections = [];
