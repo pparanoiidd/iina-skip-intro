@@ -84,7 +84,6 @@ const SEASON_WORD_TEXT_AFTER_REGEX = new RegExp(
 const BINARY_CANDIDATES = Object.freeze({
   ffmpeg: ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'],
   node: ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node'],
-  bun: ['/opt/homebrew/bin/bun', '/usr/local/bin/bun', '~/.bun/bin/bun'],
 });
 
 function createAudioMatchDetector(dependencies) {
@@ -94,7 +93,6 @@ function createAudioMatchDetector(dependencies) {
   const delay = dependencies.delay;
   const log = dependencies.log;
   const binaryPathCache = Object.create(null);
-  let audioRuntimePath = undefined;
   let homeDirectory = undefined;
 
   function logAudio(message) {
@@ -164,13 +162,21 @@ function createAudioMatchDetector(dependencies) {
     }
   }
 
-  async function locateAudioRuntime() {
-    if (audioRuntimePath !== undefined) {
-      return audioRuntimePath;
+  async function getAudioMatchDependencyStatus() {
+    const missing = [];
+
+    if (!(await locateBinary('node'))) {
+      missing.push('node');
     }
 
-    audioRuntimePath = (await locateBinary('bun')) || (await locateBinary('node')) || null;
-    return audioRuntimePath;
+    if (!(await locateBinary('ffmpeg'))) {
+      missing.push('ffmpeg');
+    }
+
+    return {
+      ok: missing.length === 0,
+      missing: missing,
+    };
   }
 
   function resolvePluginPath(path) {
@@ -670,12 +676,12 @@ function createAudioMatchDetector(dependencies) {
       return null;
     }
 
-    const runtime = await locateAudioRuntime();
-    if (!runtime) {
-      logAudio('skipped: neither bun nor node was found');
+    const nodePath = await locateBinary('node');
+    if (!nodePath) {
+      logAudio('skipped: node was not found');
       return null;
     }
-    logAudio('using runtime: ' + runtime);
+    logAudio('using node: ' + nodePath);
 
     const helperPath = getAudioMatchHelperPath();
     if (!helperPath) {
@@ -698,7 +704,7 @@ function createAudioMatchDetector(dependencies) {
     }
 
     logAudio('running helper with ' + refs.length + ' reference file(s)');
-    const result = await iinaUtils.exec(runtime, args);
+    const result = await iinaUtils.exec(nodePath, args);
     let payload = null;
     try {
       payload = JSON.parse(result.stdout);
@@ -739,6 +745,7 @@ function createAudioMatchDetector(dependencies) {
 
   return {
     detectSectionFromAudioMatch: detectSectionFromAudioMatch,
+    getAudioMatchDependencyStatus: getAudioMatchDependencyStatus,
   };
 }
 

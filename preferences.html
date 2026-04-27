@@ -41,6 +41,11 @@
         line-height: 1.3;
       }
 
+      .detection-section__notice {
+        color: rgb(176, 104, 0);
+        line-height: 1.3;
+      }
+
       .detection-options {
         display: grid;
         gap: 4px;
@@ -114,6 +119,11 @@
         pointer-events: none;
       }
 
+      .detection-section:has(.detection-section__title input:not(:checked))
+        .detection-section__notice {
+        display: none;
+      }
+
       .preference-actions {
         margin-top: 14px;
       }
@@ -165,6 +175,7 @@
               <span class="detection-section__caption small secondary">
                 Compares audio fingerprints against nearby episodes to find intros.
               </span>
+              <span class="detection-section__notice small"> Requires ffmpeg and Node.js. </span>
             </span>
           </label>
           <div class="detection-options" aria-label="Audio fingerprint detection options">
@@ -190,7 +201,7 @@
             <span class="detection-section__text">
               <span class="detection-section__label">Chapter timing detection</span>
               <span class="detection-section__caption small secondary">
-                Uses a lower-confidence timing heuristic to find intros and may misfire.
+                Uses a lower-confidence timing heuristic to find intros that may misfire.
               </span>
             </span>
           </label>
@@ -235,11 +246,7 @@
             data-pref-key="popup_button_grey"
             data-type="bool"
           />
-          <div
-            class="button-style-toggle"
-            role="radiogroup"
-            aria-label="Skip button style"
-          >
+          <div class="button-style-toggle" role="radiogroup" aria-label="Skip button style">
             <input type="radio" id="popup-button-white" name="popup_button_style" value="white" />
             <label for="popup-button-white">White</label>
             <input type="radio" id="popup-button-grey" name="popup_button_style" value="grey" />

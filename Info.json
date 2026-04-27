@@ -20,5 +20,5 @@
     "skip_end_buffer_seconds": 1,
     "popup_button_grey": false
   },
-  "permissions": ["video-overlay", "file-system"]
+  "permissions": ["video-overlay", "file-system", "show-osd"]
 }

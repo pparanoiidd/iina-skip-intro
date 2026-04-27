@@ -49,6 +49,7 @@ let detectedSections = [];
 let currentOverlaySection = null;
 let dismissedSectionIds = Object.create(null);
 let detectionRunId = 0;
+let shownAudioDependencyWarningKey = null;
 
 function log(message) {
   console.log(message);
@@ -68,6 +69,7 @@ const audioMatchDetector = createAudioMatchDetector({
   delay: delay,
 });
 const detectSectionFromAudioMatch = audioMatchDetector.detectSectionFromAudioMatch;
+const getAudioMatchDependencyStatus = audioMatchDetector.getAudioMatchDependencyStatus;
 
 function getPosition() {
   const position = mpv.getNumber('time-pos');
@@ -174,6 +176,40 @@ function getSkipEndBufferSeconds() {
 
 function getPopupButtonStyle() {
   return getBooleanPreference(PREF_POPUP_BUTTON_GREY, false) ? 'grey' : 'white';
+}
+
+function formatAudioDependencyName(dependency) {
+  if (dependency === 'node') return 'Node.js';
+  if (dependency === 'ffmpeg') return 'ffmpeg';
+  return dependency;
+}
+
+function formatAudioDependencyList(missingDependencies) {
+  const labels = missingDependencies.map(formatAudioDependencyName);
+  if (labels.length <= 1) return labels[0] || '';
+  return labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1];
+}
+
+function showAudioDependencyWarning(missingDependencies) {
+  if (!Array.isArray(missingDependencies) || !missingDependencies.length) return;
+
+  const key = missingDependencies.slice().sort().join(',');
+  if (shownAudioDependencyWarningKey === key) return;
+  shownAudioDependencyWarningKey = key;
+
+  const message =
+    'Skip Intro: audio fingerprint detection needs ' +
+    formatAudioDependencyList(missingDependencies) +
+    '. Disable audio matching in settings to hide this.';
+  log(message);
+
+  try {
+    if (core && typeof core.osd === 'function') {
+      core.osd(message);
+    }
+  } catch (error) {
+    log('Audio dependency warning OSD failed: ' + error);
+  }
 }
 
 function hasEnabledDetectionMethod(options) {
@@ -362,11 +398,18 @@ async function detectCurrentSections() {
     isDurationShortEnoughForAudioMatching(duration)
   ) {
     try {
-      const audioSectionGroup = await detectSectionFromAudioMatch(options);
+      const dependencyStatus = await getAudioMatchDependencyStatus();
       if (runId !== detectionRunId) return;
-      detectedSections = audioSectionGroup
-        ? [snapAudioSectionGroupToChapters(audioSectionGroup, chapters)]
-        : [];
+      if (!dependencyStatus.ok) {
+        showAudioDependencyWarning(dependencyStatus.missing);
+        detectedSections = [];
+      } else {
+        const audioSectionGroup = await detectSectionFromAudioMatch(options);
+        if (runId !== detectionRunId) return;
+        detectedSections = audioSectionGroup
+          ? [snapAudioSectionGroupToChapters(audioSectionGroup, chapters)]
+          : [];
+      }
     } catch (error) {
       if (runId !== detectionRunId) return;
       detectedSections = [];
