@@ -1322,6 +1322,7 @@ var SINGLE_REFERENCE_RESCUE_FULL_SECONDS = 80;
 var BOUNDARY_SEARCH_SECONDS = 6;
 var BOUNDARY_WINDOW_SECONDS = 2;
 var BOUNDARY_OUTWARD_SECONDS2 = 5;
+var CONSENSUS_END_INWARD_REFINEMENT_MAX_SECONDS = 0.5;
 var DIAGONAL_WALK_SECONDS = 12;
 var DIAGONAL_WALK_SCORE_TOLERANCE = 0.04;
 var DIAGONAL_WALK_DISTANCE_PENALTY = 6e-3;
@@ -1777,7 +1778,6 @@ function buildConsensusCandidates(pairwiseRuns, minLen, maxLen) {
       candidates.push(candidate);
     }
   }
-  candidates.push(...buildSingleReferenceCandidates(pairwiseRuns, minLen, maxLen));
   candidates.sort(
     (a, b) => lexicographicDescending(
       [a.totalScore, a.duration, a.similarityScore, -a.mainStart],
@@ -1786,6 +1786,21 @@ function buildConsensusCandidates(pairwiseRuns, minLen, maxLen) {
   );
   const deduped = [];
   for (const candidate of candidates) {
+    if (deduped.some(
+      (other) => Math.abs(candidate.mainStart - other.mainStart) <= toleranceFrames && Math.abs(candidate.mainEnd - other.mainEnd) <= toleranceFrames
+    )) {
+      continue;
+    }
+    deduped.push(candidate);
+  }
+  const singletonCandidates = buildSingleReferenceCandidates(pairwiseRuns, minLen, maxLen);
+  singletonCandidates.sort(
+    (a, b) => lexicographicDescending(
+      [a.totalScore, a.duration, a.similarityScore, -a.mainStart],
+      [b.totalScore, b.duration, b.similarityScore, -b.mainStart]
+    )
+  );
+  for (const candidate of singletonCandidates) {
     if (deduped.some(
       (other) => Math.abs(candidate.mainStart - other.mainStart) <= toleranceFrames && Math.abs(candidate.mainEnd - other.mainEnd) <= toleranceFrames
     )) {
@@ -2077,9 +2092,13 @@ function findBestBoundaryFrame({
   }
   return bestFrame;
 }
+function shouldPreserveConsensusRunEnd(candidate) {
+  return candidate.refs.length > 1 && candidate.referenceSupport >= 0.75 && candidate.overlapRatio >= 0.85 && candidate.consensusScore >= 0.75;
+}
 function refineSharedAudioBoundaries(candidate, pairwiseRuns, minLen, maxLen, mainFrames) {
   const inwardFrames = Math.round(BOUNDARY_SEARCH_SECONDS / FRAME_HOP_SECONDS2);
   const outwardFrames = Math.round(BOUNDARY_OUTWARD_SECONDS2 / FRAME_HOP_SECONDS2);
+  const endInwardFrames = shouldPreserveConsensusRunEnd(candidate) ? Math.round(CONSENSUS_END_INWARD_REFINEMENT_MAX_SECONDS / FRAME_HOP_SECONDS2) : inwardFrames;
   let refined = { ...candidate };
   for (let pass = 0; pass < 2; pass += 1) {
     const minStart = Math.max(0, refined.mainStart - outwardFrames);
@@ -2094,7 +2113,7 @@ function refineSharedAudioBoundaries(candidate, pairwiseRuns, minLen, maxLen, ma
       minFrame: minStart,
       maxFrame: maxStart
     });
-    const minEnd = Math.max(refined.mainStart + minLen, refined.mainEnd - inwardFrames);
+    const minEnd = Math.max(refined.mainStart + minLen, refined.mainEnd - endInwardFrames);
     const maxEnd = Math.min(mainFrames, refined.mainEnd + outwardFrames);
     refined.mainEnd = findBestBoundaryFrame({
       originalCandidate: candidate,
@@ -2146,18 +2165,36 @@ function singleReferenceRescueConfidence(best, simConf, boundaryConf) {
   const qualityConf = Math.min(simConf, durationConf);
   return qualityConf * (0.65 + boundaryConf * 0.35);
 }
+function multiReferenceAgreementConfidence(best, boundaryConf) {
+  if (best.refs.length < 2 || best.totalReferences <= 1) {
+    return 0;
+  }
+  return Math.min(
+    clamp((best.referenceSupport - 0.7) / 0.3, 0, 1),
+    clamp((best.overlapRatio - 0.8) / 0.15, 0, 1),
+    clamp((best.consensusScore - 0.75) / 0.2, 0, 1),
+    boundaryConf
+  );
+}
 function computeConfidence(best, candidates) {
   let altGap = 0.12;
+  let hasDistinctAlternative = false;
   for (let index = 1; index < candidates.length; index += 1) {
     const candidate = candidates[index];
     if (isDistinctCandidate(best, candidate)) {
       altGap = Math.max(0, best.totalScore - candidate.totalScore);
+      hasDistinctAlternative = true;
       break;
     }
+  }
+  if (!hasDistinctAlternative) {
+    altGap = Math.max(altGap, best.totalScore);
   }
   const simConf = clamp((best.similarityScore - 0.42) / 0.2, 0, 1);
   const overlapConf = clamp((best.overlapRatio - 0.3) / 0.45, 0, 1);
   const boundaryConf = clamp((best.boundaryScore - 0.02) / 0.18, 0, 1);
+  const agreementConf = multiReferenceAgreementConfidence(best, boundaryConf);
+  const effectiveSimConf = Math.max(simConf, agreementConf * 0.15);
   const singletonRescueConf = singleReferenceRescueConfidence(best, simConf, boundaryConf);
   const supportConf = Math.max(
     clamp((best.referenceSupport - 0.45) / 0.5, 0, 1),
@@ -2168,7 +2205,7 @@ function computeConfidence(best, candidates) {
     singletonRescueConf * 0.7
   );
   const gapConf = clamp((altGap - 1.5) / 8, 0, 1);
-  const confidence = simConf * 0.35 + supportConf * 0.15 + overlapConf * 0.15 + consensusConf * 0.15 + boundaryConf * 0.1 + gapConf * 0.1;
+  const confidence = effectiveSimConf * 0.35 + supportConf * 0.15 + overlapConf * 0.15 + consensusConf * 0.15 + boundaryConf * 0.1 + gapConf * 0.1;
   return {
     confidence,
     gap: altGap,
