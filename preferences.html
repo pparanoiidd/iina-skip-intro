@@ -4,6 +4,17 @@
     <meta charset="utf-8" />
     <title>Skip Intro Preferences</title>
     <style>
+      body {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .preference-heading {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+
       .detection-sections {
         display: grid;
         gap: 14px;
@@ -19,13 +30,20 @@
       .detection-section__title {
         display: flex;
         align-items: flex-start;
-        gap: 6px;
+        gap: 4px;
       }
 
       .detection-section__title input,
       .detection-option input,
       .global-option input {
         margin-top: 2px;
+      }
+
+      .detection-section__title input[type='checkbox'],
+      .detection-option input[type='checkbox'],
+      .global-option input[type='checkbox'] {
+        transform: scale(1.22);
+        transform-origin: center;
       }
 
       .detection-section__text {
@@ -81,7 +99,22 @@
       }
 
       .global-option input[type='number'] {
-        width: 44px;
+        border: 1px solid rgba(128, 128, 128, 0.18);
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: 13px;
+        height: 26px;
+        line-height: normal;
+        margin-bottom: -2px;
+        margin-top: 0;
+        padding: 0 6px;
+        width: 50px;
+      }
+
+      .global-option input[type='number']::-webkit-inner-spin-button,
+      .global-option input[type='number']::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
       }
 
       .hidden-preference-input {
@@ -94,7 +127,7 @@
         display: inline-flex;
         gap: 2px;
         padding: 2px;
-        border: 1px solid rgba(128, 128, 128, 0.38);
+        border: 1px solid rgba(128, 128, 128, 0.18);
         border-radius: 7px;
       }
 
@@ -119,11 +152,6 @@
         pointer-events: none;
       }
 
-      .detection-section:has(.detection-section__title input:not(:checked))
-        .detection-section__notice {
-        display: none;
-      }
-
       .preference-actions {
         margin-top: 14px;
       }
@@ -136,7 +164,7 @@
   </head>
   <body>
     <div class="pref-section">
-      Intro detection methods
+      <div class="preference-heading">Intro detection methods</div>
       <p class="small secondary pref-help">
         Enabled methods run in this order and stop after the first match.
       </p>
@@ -175,7 +203,9 @@
               <span class="detection-section__caption small secondary">
                 Compares audio fingerprints against nearby episodes to find intros.
               </span>
-              <span class="detection-section__notice small"> Requires ffmpeg and Node.js. </span>
+              <span class="detection-section__notice small">
+                Requires ffmpeg and Node.js to be installed.
+              </span>
             </span>
           </label>
           <div class="detection-options" aria-label="Audio fingerprint detection options">
@@ -210,22 +240,22 @@
 
       <div class="section-divider" aria-hidden="true"></div>
 
-      <div>Skip pop-up</div>
+      <div class="preference-heading">Skip pop-up</div>
       <div class="global-options">
         <label class="global-option">
+          <span>Auto hide after:</span>
           <input
             type="number"
             min="5"
-            max="30"
+            max="20"
             step="1"
             data-pref-key="popup_auto_dismiss_seconds"
             data-type="int"
           />
-          <span class="detection-option__text">
-            <span>Show skip popup for this many seconds</span>
-          </span>
+          <span>s</span>
         </label>
         <label class="global-option">
+          <span>Leave at end:</span>
           <input
             type="number"
             min="0"
@@ -234,9 +264,7 @@
             data-pref-key="skip_end_buffer_seconds"
             data-type="int"
           />
-          <span class="detection-option__text">
-            <span>Leave this many seconds at the end when skipping</span>
-          </span>
+          <span>s</span>
         </label>
         <div class="global-option">
           <input
@@ -300,6 +328,42 @@
         input.dispatchEvent(event);
       }
 
+      function clampNumberInput(input) {
+        if (!input || input.type !== 'number') return;
+        if (input.getAttribute('data-clamping') === 'true') return;
+        input.setAttribute('data-clamping', 'true');
+
+        const parsedValue = parseInt(input.value, 10);
+        const min = parseInt(input.getAttribute('min'), 10);
+        const max = parseInt(input.getAttribute('max'), 10);
+        let clampedValue = isFinite(parsedValue) ? parsedValue : min;
+
+        if (isFinite(min)) clampedValue = Math.max(min, clampedValue);
+        if (isFinite(max)) clampedValue = Math.min(max, clampedValue);
+
+        if (input.value !== String(clampedValue)) {
+          input.value = String(clampedValue);
+          input.setAttribute('value', String(clampedValue));
+        }
+
+        setPreference(input.getAttribute('data-pref-key'), clampedValue);
+        dispatchPreferenceEvent(input, 'input');
+        dispatchPreferenceEvent(input, 'change');
+        input.removeAttribute('data-clamping');
+      }
+
+      function initializeNumberPreferenceClamping() {
+        const numberInputs = document.querySelectorAll('input[type="number"][data-pref-key]');
+        for (let i = 0; i < numberInputs.length; i++) {
+          numberInputs[i].addEventListener('blur', function () {
+            clampNumberInput(this);
+          });
+          numberInputs[i].addEventListener('change', function () {
+            clampNumberInput(this);
+          });
+        }
+      }
+
       function setPopupButtonGreyPreference(isGrey) {
         const preferenceInput = document.getElementById('popup-button-grey-preference');
         if (!preferenceInput) return;
@@ -339,6 +403,7 @@
       }
 
       initializePopupButtonStyleControl();
+      initializeNumberPreferenceClamping();
 
       document.getElementById('reset-preferences').addEventListener('click', function () {
         Object.keys(preferenceDefaults).forEach(function (key) {
