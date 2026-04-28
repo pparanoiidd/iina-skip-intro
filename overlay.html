@@ -38,6 +38,10 @@
         transition-delay: 0s;
       }
 
+      #box-wrap.status {
+        pointer-events: none;
+      }
+
       /* ── main button ── */
       #box {
         --auto-dismiss-ms: 15000ms;
@@ -108,11 +112,21 @@
           linear forwards;
       }
 
+      #box-wrap.status #box {
+        background: var(--button-progress-background);
+        cursor: default;
+      }
+
+      #box-wrap.status #box::before {
+        opacity: 0;
+        animation: none;
+      }
+
       #box-wrap.auto-dismiss-paused #box::before {
         animation-play-state: paused;
       }
 
-      #box-wrap.visible #box:hover {
+      #box-wrap.visible:not(.status) #box:hover {
         filter: brightness(1.03) contrast(1.02);
       }
 
@@ -171,6 +185,8 @@
       var autoDismissPlaybackPaused = false;
       var autoDismissAnimationReset = false;
       var currentSectionId = null;
+      var currentMode = 'prompt';
+      var clickable = true;
 
       function setVisible(visible) {
         boxWrap.classList.toggle('visible', !!visible);
@@ -195,6 +211,20 @@
         document.body.classList.toggle('button-style-grey', style === 'grey');
       }
 
+      function setMode(mode) {
+        currentMode = mode === 'status' ? 'status' : 'prompt';
+        clickable = currentMode === 'prompt';
+        boxWrap.classList.toggle('status', currentMode === 'status');
+        box.setAttribute('role', clickable ? 'button' : 'status');
+        if (clickable) {
+          box.setAttribute('data-clickable', '');
+          box.setAttribute('tabindex', '0');
+        } else {
+          box.removeAttribute('data-clickable');
+          box.removeAttribute('tabindex');
+        }
+      }
+
       function restartAutoDismissProgress() {
         autoDismissAnimationReset = !autoDismissAnimationReset;
         box.style.setProperty(
@@ -215,7 +245,7 @@
 
         boxWrap.classList.toggle(
           'auto-dismiss-paused',
-          visible && (interactionPaused || autoDismissPlaybackPaused),
+          currentMode === 'prompt' && visible && (interactionPaused || autoDismissPlaybackPaused),
         );
       }
 
@@ -224,10 +254,12 @@
       });
 
       box.addEventListener('click', function () {
+        if (!clickable) return;
         postMessage('skip');
       });
 
       box.addEventListener('keydown', function (event) {
+        if (!clickable) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           postMessage('skip');
@@ -235,6 +267,7 @@
       });
 
       box.addEventListener('animationend', function (event) {
+        if (currentMode !== 'prompt') return;
         if (
           event.animationName === 'auto-dismiss-progress' ||
           event.animationName === 'auto-dismiss-progress-reset'
@@ -266,9 +299,10 @@
             state.sectionId !== null &&
             state.sectionId !== currentSectionId;
 
+          setMode(state.mode);
           setAutoDismissDuration(state.autoDismissMs);
           autoDismissPlaybackPaused = !!state.playbackPaused;
-          setSkipLabel(state.skipLabel);
+          setSkipLabel(state.label || state.skipLabel);
           setButtonStyle(state.buttonStyle);
           if (sectionChanged) {
             restartAutoDismissProgress();

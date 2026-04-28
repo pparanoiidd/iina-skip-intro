@@ -16,6 +16,13 @@
     "detect_chapter_timing": false,
     "detect_recaps": false,
     "detect_credits": true,
+    "auto_skip_title_intros": false,
+    "auto_skip_title_recaps": false,
+    "auto_skip_title_credits": false,
+    "auto_skip_audio_matching": false,
+    "auto_skip_start_delay_seconds": 0,
+    "show_auto_skip_status": true,
+    "auto_skip_first_episode_of_season": true,
     "popup_auto_dismiss_seconds": 15,
     "skip_end_buffer_seconds": 1,
     "popup_button_grey": false

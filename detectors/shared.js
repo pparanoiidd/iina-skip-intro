@@ -49,6 +49,74 @@ const RECAP_TITLES = {
   digest: true,
   summary: true,
 };
+const SEASON_EPISODE_REGEXES = [
+  /(?:^|[\s._\-[\(])s(\d{1,2})[\s._\-\]\[]*(ep|sp|e|x)[\s._-]*(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i,
+  /(?:^|[\s._\-[\(])(\d{1,2})x(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i,
+];
+const STANDALONE_SPECIAL_EP_REGEX =
+  /(?:^|[\s._\-[\(])(?:sp|special|ova|oav|oad)[\s._-]*(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i;
+const SEASON_WORD_REGEX = /\b(?:season|saison|temporada|stagione|staffel|serie)[. _-]?(\d{1,2})\b/i;
+const SEASON_ONLY_REGEX = /(?:^|[\s._\-[\(])s(\d{1,2})(?!\d)(?=$|[\s._\-\]\)])/i;
+const SEASON_ORDINAL_PREFIX_REGEX =
+  /\b(\d{1,2})(?:st|nd|rd|th)[. _-]*(?:season|saison|temporada|stagione|staffel|serie)\b/i;
+const EPISODE_WORD_REGEX = /\b(?:ep(?:isode)?|eps?|[ée]p(?:isode)?)[. _-]?(\d{1,4})(?:v\d+)?\b/i;
+const SINGLE_E_EPISODE_REGEX = /(?:^|[\s._-])e[\s._-]*(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i;
+const SEASON_DASH_EPISODE_REGEX = /^[\s._\-\]\)]*-[\s._-]*(\d{1,4})(?:v\d+)?(?=$|[\s._\-\]\)])/i;
+const NUMBER_WORD_MAP = Object.freeze({
+  first: 1,
+  second: 2,
+  third: 3,
+  fourth: 4,
+  fifth: 5,
+  sixth: 6,
+  seventh: 7,
+  eighth: 8,
+  ninth: 9,
+  tenth: 10,
+  eleventh: 11,
+  twelfth: 12,
+  thirteenth: 13,
+  fourteenth: 14,
+  fifteenth: 15,
+  sixteenth: 16,
+  seventeenth: 17,
+  eighteenth: 18,
+  nineteenth: 19,
+  twentieth: 20,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+});
+const NUMBER_WORD_PATTERN = Object.keys(NUMBER_WORD_MAP)
+  .sort(function (a, b) {
+    return b.length - a.length || a.localeCompare(b);
+  })
+  .join('|');
+const SEASON_WORD_TEXT_BEFORE_REGEX = new RegExp(
+  '\\b(' + NUMBER_WORD_PATTERN + ')[. _-]*(?:season|saison|temporada|stagione|staffel|serie)\\b',
+  'i',
+);
+const SEASON_WORD_TEXT_AFTER_REGEX = new RegExp(
+  '\\b(?:season|saison|temporada|stagione|staffel|serie)[. _-]*(' + NUMBER_WORD_PATTERN + ')\\b',
+  'i',
+);
 
 function getLocalFilePath(value) {
   if (!value) return null;
@@ -83,6 +151,152 @@ function isVideoFilePath(path) {
 
   const extensionMatch = filename.match(/\.([^.]+)$/);
   return !!(extensionMatch && VIDEO_FILE_EXTENSION_MAP[extensionMatch[1].toLowerCase()]);
+}
+
+function getFilenameStem(path) {
+  return getFilename(path).replace(/\.[^.]+$/, '');
+}
+
+function numberWordToInt(word) {
+  return word ? NUMBER_WORD_MAP[word.toLowerCase()] || NaN : NaN;
+}
+
+function parseIntOrNull(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function findSeasonToken(text) {
+  const matchers = [
+    {
+      regex: SEASON_WORD_REGEX,
+      value: function (match) {
+        return parseIntOrNull(match[1]);
+      },
+    },
+    {
+      regex: SEASON_ONLY_REGEX,
+      value: function (match) {
+        return parseIntOrNull(match[1]);
+      },
+    },
+    {
+      regex: SEASON_ORDINAL_PREFIX_REGEX,
+      value: function (match) {
+        return parseIntOrNull(match[1]);
+      },
+    },
+    {
+      regex: SEASON_WORD_TEXT_BEFORE_REGEX,
+      value: function (match) {
+        return numberWordToInt(match[1]);
+      },
+    },
+    {
+      regex: SEASON_WORD_TEXT_AFTER_REGEX,
+      value: function (match) {
+        return numberWordToInt(match[1]);
+      },
+    },
+  ];
+
+  for (let i = 0; i < matchers.length; i++) {
+    const matcher = matchers[i];
+    const match = text.match(matcher.regex);
+    if (!match) continue;
+
+    const season = matcher.value(match);
+    if (Number.isFinite(season)) {
+      return {
+        season: season,
+        index: match.index,
+        endIndex: match.index + match[0].length,
+      };
+    }
+  }
+
+  return null;
+}
+
+function parseSeasonEpisode(path) {
+  const text = getFilenameStem(path);
+  if (!text) return null;
+  const standaloneSpecialEpisode = text.match(STANDALONE_SPECIAL_EP_REGEX);
+
+  for (let i = 0; i < SEASON_EPISODE_REGEXES.length; i++) {
+    const match = text.match(SEASON_EPISODE_REGEXES[i]);
+    if (!match) continue;
+
+    const season = parseIntOrNull(match[1]);
+    const kind = i === 0 ? (match[2] || '').toLowerCase() : '';
+    const episode = parseIntOrNull(i === 0 ? match[3] : match[2]);
+    if (Number.isFinite(season) && Number.isFinite(episode)) {
+      return {
+        season: season,
+        episode: episode,
+        index: match.index,
+        isSpecial: season === 0 || kind === 'sp' || !!standaloneSpecialEpisode,
+      };
+    }
+  }
+
+  const seasonToken = findSeasonToken(text);
+  if (!seasonToken) {
+    const specialEpisode = standaloneSpecialEpisode
+      ? parseIntOrNull(standaloneSpecialEpisode[1])
+      : null;
+    return Number.isFinite(specialEpisode)
+      ? {
+          season: null,
+          episode: specialEpisode,
+          index: standaloneSpecialEpisode.index,
+          isSpecial: true,
+        }
+      : null;
+  }
+
+  let episode = null;
+  let episodeIndex = Infinity;
+  const episodeWord = text.match(EPISODE_WORD_REGEX);
+  if (episodeWord) {
+    episode = parseIntOrNull(episodeWord[1]);
+    episodeIndex = episodeWord.index;
+  }
+
+  if (!Number.isFinite(episode)) {
+    const singleE = text.match(SINGLE_E_EPISODE_REGEX);
+    if (singleE) {
+      episode = parseIntOrNull(singleE[1]);
+      episodeIndex = singleE.index;
+    }
+  }
+
+  if (!Number.isFinite(episode)) {
+    const afterSeason = text.slice(seasonToken.endIndex);
+    const dashEpisode = afterSeason.match(SEASON_DASH_EPISODE_REGEX);
+    if (dashEpisode) {
+      episode = parseIntOrNull(dashEpisode[1]);
+      episodeIndex = seasonToken.endIndex + dashEpisode.index;
+    }
+  }
+
+  if (!Number.isFinite(episode)) return null;
+
+  return {
+    season: seasonToken.season,
+    episode: episode,
+    index: Math.min(seasonToken.index, episodeIndex),
+    isSpecial: seasonToken.season === 0,
+  };
+}
+
+function formatParsedSeasonEpisode(parsed) {
+  if (!parsed) return '(unparsed)';
+
+  const label = Number.isFinite(parsed.season)
+    ? 'S' + parsed.season + 'E' + parsed.episode
+    : 'SP' + parsed.episode;
+  return label + (parsed.isSpecial ? ' special' : '');
 }
 
 function getChapterStart(chapter) {
@@ -224,10 +438,13 @@ module.exports = {
   SECTION_SOURCE_AUDIO_FINGERPRINT: SECTION_SOURCE_AUDIO_FINGERPRINT,
   classifyChapterTitle: classifyChapterTitle,
   getFilename: getFilename,
+  getFilenameStem: getFilenameStem,
   getChapterStart: getChapterStart,
   getChapterEnd: getChapterEnd,
   getDetectionOptions: getDetectionOptions,
   getLocalFilePath: getLocalFilePath,
+  parseSeasonEpisode: parseSeasonEpisode,
+  formatParsedSeasonEpisode: formatParsedSeasonEpisode,
   groupConnectedSections: groupConnectedSections,
   isPlainIntroChapterTitle: isPlainIntroChapterTitle,
   isAllowedTitleKind: isAllowedTitleKind,

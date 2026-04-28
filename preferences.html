@@ -66,14 +66,19 @@
 
       .detection-options {
         display: grid;
-        gap: 4px;
+        gap: 7px;
         margin-left: 28px;
       }
 
       .detection-option {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
+        flex-wrap: wrap;
         gap: 6px;
+      }
+
+      .detection-option__label {
+        min-width: 58px;
       }
 
       .detection-option__text {
@@ -96,6 +101,10 @@
         display: flex;
         align-items: center;
         gap: 6px;
+      }
+
+      .global-option__label {
+        min-width: 112px;
       }
 
       .global-option input[type='number'] {
@@ -123,7 +132,7 @@
         pointer-events: none;
       }
 
-      .button-style-toggle {
+      .toggle-control {
         display: inline-flex;
         gap: 2px;
         padding: 2px;
@@ -131,20 +140,25 @@
         border-radius: 7px;
       }
 
-      .button-style-toggle input {
+      .toggle-control input {
         position: absolute;
         opacity: 0;
         pointer-events: none;
       }
 
-      .button-style-toggle label {
+      .toggle-control label {
         padding: 2px 9px;
         border-radius: 5px;
         cursor: pointer;
+        white-space: nowrap;
       }
 
-      .button-style-toggle input:checked + label {
+      .toggle-control input:checked + label {
         background: rgba(128, 128, 128, 0.22);
+      }
+
+      .toggle-control input:not(:checked) + label:hover {
+        background: rgba(128, 128, 128, 0.12);
       }
 
       .detection-section:has(.detection-section__title input:not(:checked)) .detection-options {
@@ -154,6 +168,10 @@
 
       .preference-actions {
         margin-top: 14px;
+      }
+
+      .preference-actions button {
+        cursor: pointer;
       }
 
       .section-divider {
@@ -180,18 +198,153 @@
             </span>
           </label>
           <div class="detection-options" aria-label="Chapter title detection options">
-            <label class="detection-option">
-              <input type="checkbox" data-pref-key="detect_intros" data-type="bool" />
-              <span>Detect Intros?</span>
-            </label>
-            <label class="detection-option">
-              <input type="checkbox" data-pref-key="detect_recaps" data-type="bool" />
-              <span>Detect Recaps?</span>
-            </label>
-            <label class="detection-option">
-              <input type="checkbox" data-pref-key="detect_credits" data-type="bool" />
-              <span>Detect Credits?</span>
-            </label>
+            <div
+              class="detection-option"
+              data-behavior-control
+              data-detect-pref-key="detect_intros"
+              data-auto-pref-key="auto_skip_title_intros"
+            >
+              <input
+                class="hidden-preference-input"
+                tabindex="-1"
+                type="checkbox"
+                data-pref-key="detect_intros"
+                data-type="bool"
+              />
+              <input
+                class="hidden-preference-input"
+                tabindex="-1"
+                type="checkbox"
+                data-pref-key="auto_skip_title_intros"
+                data-type="bool"
+              />
+              <span class="detection-option__label">Intros:</span>
+              <div
+                class="toggle-control segmented-toggle"
+                role="radiogroup"
+                aria-label="Chapter title intro behavior"
+              >
+                <input
+                  type="radio"
+                  id="title-intros-off"
+                  name="title_intros_behavior"
+                  value="off"
+                />
+                <label for="title-intros-off">Off</label>
+                <input
+                  type="radio"
+                  id="title-intros-prompt"
+                  name="title_intros_behavior"
+                  value="prompt"
+                />
+                <label for="title-intros-prompt">Prompt</label>
+                <input
+                  type="radio"
+                  id="title-intros-auto"
+                  name="title_intros_behavior"
+                  value="auto"
+                />
+                <label for="title-intros-auto">Auto-Skip</label>
+              </div>
+            </div>
+            <div
+              class="detection-option"
+              data-behavior-control
+              data-detect-pref-key="detect_recaps"
+              data-auto-pref-key="auto_skip_title_recaps"
+            >
+              <input
+                class="hidden-preference-input"
+                tabindex="-1"
+                type="checkbox"
+                data-pref-key="detect_recaps"
+                data-type="bool"
+              />
+              <input
+                class="hidden-preference-input"
+                tabindex="-1"
+                type="checkbox"
+                data-pref-key="auto_skip_title_recaps"
+                data-type="bool"
+              />
+              <span class="detection-option__label">Recaps:</span>
+              <div
+                class="toggle-control segmented-toggle"
+                role="radiogroup"
+                aria-label="Chapter title recap behavior"
+              >
+                <input
+                  type="radio"
+                  id="title-recaps-off"
+                  name="title_recaps_behavior"
+                  value="off"
+                />
+                <label for="title-recaps-off">Off</label>
+                <input
+                  type="radio"
+                  id="title-recaps-prompt"
+                  name="title_recaps_behavior"
+                  value="prompt"
+                />
+                <label for="title-recaps-prompt">Prompt</label>
+                <input
+                  type="radio"
+                  id="title-recaps-auto"
+                  name="title_recaps_behavior"
+                  value="auto"
+                />
+                <label for="title-recaps-auto">Auto-Skip</label>
+              </div>
+            </div>
+            <div
+              class="detection-option"
+              data-behavior-control
+              data-detect-pref-key="detect_credits"
+              data-auto-pref-key="auto_skip_title_credits"
+            >
+              <input
+                class="hidden-preference-input"
+                tabindex="-1"
+                type="checkbox"
+                data-pref-key="detect_credits"
+                data-type="bool"
+              />
+              <input
+                class="hidden-preference-input"
+                tabindex="-1"
+                type="checkbox"
+                data-pref-key="auto_skip_title_credits"
+                data-type="bool"
+              />
+              <span class="detection-option__label">Credits:</span>
+              <div
+                class="toggle-control segmented-toggle"
+                role="radiogroup"
+                aria-label="Chapter title credits behavior"
+              >
+                <input
+                  type="radio"
+                  id="title-credits-off"
+                  name="title_credits_behavior"
+                  value="off"
+                />
+                <label for="title-credits-off">Off</label>
+                <input
+                  type="radio"
+                  id="title-credits-prompt"
+                  name="title_credits_behavior"
+                  value="prompt"
+                />
+                <label for="title-credits-prompt">Prompt</label>
+                <input
+                  type="radio"
+                  id="title-credits-auto"
+                  name="title_credits_behavior"
+                  value="auto"
+                />
+                <label for="title-credits-auto">Auto-Skip</label>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -209,19 +362,55 @@
             </span>
           </label>
           <div class="detection-options" aria-label="Audio fingerprint detection options">
-            <label class="detection-option">
+            <div
+              class="detection-option"
+              data-behavior-control
+              data-auto-pref-key="auto_skip_audio_matching"
+            >
               <input
+                class="hidden-preference-input"
+                tabindex="-1"
                 type="checkbox"
-                data-pref-key="audio_match_parse_episode_numbers"
+                data-pref-key="auto_skip_audio_matching"
                 data-type="bool"
               />
-              <span class="detection-option__text">
-                <span>Use season and episode numbers from filenames?</span>
-                <span class="detection-option__caption small secondary">
-                  Helps pick the correct matching reference episodes.
+              <span class="detection-option__label">Intros:</span>
+              <div
+                class="toggle-control segmented-toggle"
+                role="radiogroup"
+                aria-label="Audio fingerprint behavior"
+              >
+                <input
+                  type="radio"
+                  id="audio-matching-prompt"
+                  name="audio_matching_behavior"
+                  value="prompt"
+                />
+                <label for="audio-matching-prompt">Prompt</label>
+                <input
+                  type="radio"
+                  id="audio-matching-auto"
+                  name="audio_matching_behavior"
+                  value="auto"
+                />
+                <label for="audio-matching-auto">Auto-Skip</label>
+              </div>
+            </div>
+            <div class="detection-option">
+              <label class="detection-option">
+                <input
+                  type="checkbox"
+                  data-pref-key="audio_match_parse_episode_numbers"
+                  data-type="bool"
+                />
+                <span class="detection-option__text">
+                  <span>Use season and episode numbers from filenames?</span>
+                  <span class="detection-option__caption small secondary">
+                    Helps pick the correct matching reference episodes.
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+            </div>
           </div>
         </section>
 
@@ -231,7 +420,7 @@
             <span class="detection-section__text">
               <span class="detection-section__label">Chapter timing detection</span>
               <span class="detection-section__caption small secondary">
-                Uses a lower-confidence timing heuristic to find intros that may misfire.
+                Uses a lower-confidence timing heuristic to find intros. May misfire.
               </span>
             </span>
           </label>
@@ -243,7 +432,7 @@
       <div class="preference-heading">Skip pop-up</div>
       <div class="global-options">
         <label class="global-option">
-          <span>Auto hide after:</span>
+          <span class="global-option__label">Auto hide after:</span>
           <input
             type="number"
             min="5"
@@ -255,7 +444,7 @@
           <span>s</span>
         </label>
         <label class="global-option">
-          <span>Leave at end:</span>
+          <span class="global-option__label">Leave at end:</span>
           <input
             type="number"
             min="0"
@@ -270,12 +459,17 @@
           <input
             id="popup-button-grey-preference"
             class="hidden-preference-input"
+            tabindex="-1"
             type="checkbox"
             data-pref-key="popup_button_grey"
             data-type="bool"
           />
-          <span>Skip button style:</span>
-          <div class="button-style-toggle" role="radiogroup" aria-label="Skip button style">
+          <span class="global-option__label">Skip button style:</span>
+          <div
+            class="toggle-control button-style-toggle"
+            role="radiogroup"
+            aria-label="Skip button style"
+          >
             <input type="radio" id="popup-button-white" name="popup_button_style" value="white" />
             <label for="popup-button-white">White</label>
             <input type="radio" id="popup-button-grey" name="popup_button_style" value="grey" />
@@ -283,6 +477,37 @@
           </div>
         </div>
       </div>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <div class="preference-heading">Auto-Skip</div>
+      <div class="global-options">
+        <label class="global-option">
+          <span class="global-option__label">Auto-Skip delay:</span>
+          <input
+            type="number"
+            min="0"
+            max="10"
+            step="1"
+            data-pref-key="auto_skip_start_delay_seconds"
+            data-type="int"
+          />
+          <span>s</span>
+        </label>
+        <label class="global-option">
+          <input type="checkbox" data-pref-key="show_auto_skip_status" data-type="bool" />
+          <span>Show Auto-Skip status pop-up</span>
+        </label>
+        <label class="global-option">
+          <input
+            type="checkbox"
+            data-pref-key="auto_skip_first_episode_of_season"
+            data-type="bool"
+          />
+          <span>Auto-Skip first episode of the season</span>
+        </label>
+      </div>
+
       <div class="preference-actions">
         <button type="button" id="reset-preferences">Reset to Defaults</button>
       </div>
@@ -296,6 +521,13 @@
         detect_chapter_timing: false,
         detect_recaps: false,
         detect_credits: true,
+        auto_skip_title_intros: false,
+        auto_skip_title_recaps: false,
+        auto_skip_title_credits: false,
+        auto_skip_audio_matching: false,
+        auto_skip_start_delay_seconds: 0,
+        show_auto_skip_status: true,
+        auto_skip_first_episode_of_season: true,
         popup_auto_dismiss_seconds: 15,
         skip_end_buffer_seconds: 1,
         popup_button_grey: false,
@@ -326,6 +558,28 @@
         input.dispatchEvent(event);
       }
 
+      function setPreferenceInputValue(input, value, options) {
+        if (!input) return;
+
+        const resolvedOptions = options || {};
+        if (input.type === 'checkbox') {
+          input.checked = value === true || value === 'true';
+        } else if (input.type === 'number') {
+          input.value = String(value);
+          input.setAttribute('value', String(value));
+        } else {
+          input.value = value;
+        }
+
+        if (resolvedOptions.persist) {
+          setPreference(input.getAttribute('data-pref-key'), value);
+        }
+        if (resolvedOptions.dispatch) {
+          dispatchPreferenceEvent(input, 'input');
+          dispatchPreferenceEvent(input, 'change');
+        }
+      }
+
       function clampNumberInput(input) {
         if (!input || input.type !== 'number') return;
         if (input.getAttribute('data-clamping') === 'true') return;
@@ -339,14 +593,7 @@
         if (isFinite(min)) clampedValue = Math.max(min, clampedValue);
         if (isFinite(max)) clampedValue = Math.min(max, clampedValue);
 
-        if (input.value !== String(clampedValue)) {
-          input.value = String(clampedValue);
-          input.setAttribute('value', String(clampedValue));
-        }
-
-        setPreference(input.getAttribute('data-pref-key'), clampedValue);
-        dispatchPreferenceEvent(input, 'input');
-        dispatchPreferenceEvent(input, 'change');
+        setPreferenceInputValue(input, clampedValue, { persist: true, dispatch: true });
         input.removeAttribute('data-clamping');
       }
 
@@ -362,14 +609,86 @@
         }
       }
 
+      function setBooleanPreferenceInput(input, value) {
+        setPreferenceInputValue(input, !!value, { persist: true, dispatch: true });
+      }
+
+      function getBehaviorFromPreferenceInputs(detectInput, autoInput) {
+        if (!detectInput || !detectInput.checked) return 'off';
+        return autoInput && autoInput.checked ? 'auto' : 'prompt';
+      }
+
+      function syncBehaviorControl(control) {
+        const detectKey = control.getAttribute('data-detect-pref-key');
+        const autoKey = control.getAttribute('data-auto-pref-key');
+        const detectInput = detectKey
+          ? control.querySelector('[data-pref-key="' + detectKey + '"]')
+          : null;
+        const autoInput = control.querySelector('[data-pref-key="' + autoKey + '"]');
+        const behavior = detectKey
+          ? getBehaviorFromPreferenceInputs(detectInput, autoInput)
+          : autoInput && autoInput.checked
+            ? 'auto'
+            : 'prompt';
+        const radio = control.querySelector('input[type="radio"][value="' + behavior + '"]');
+
+        if (radio) radio.checked = true;
+      }
+
+      function setBehaviorPreference(control, behavior) {
+        const detectKey = control.getAttribute('data-detect-pref-key');
+        const autoKey = control.getAttribute('data-auto-pref-key');
+        const detectInput = detectKey
+          ? control.querySelector('[data-pref-key="' + detectKey + '"]')
+          : null;
+        const autoInput = control.querySelector('[data-pref-key="' + autoKey + '"]');
+
+        if (detectKey) setBooleanPreferenceInput(detectInput, behavior !== 'off');
+        setBooleanPreferenceInput(autoInput, behavior === 'auto');
+      }
+
+      function initializeBehaviorControls() {
+        const controls = document.querySelectorAll('[data-behavior-control]');
+        for (let i = 0; i < controls.length; i++) {
+          const control = controls[i];
+          const radios = control.querySelectorAll('input[type="radio"]');
+          const preferenceInputs = control.querySelectorAll('input[data-pref-key]');
+
+          for (let j = 0; j < radios.length; j++) {
+            radios[j].addEventListener('change', function () {
+              if (this.checked) setBehaviorPreference(control, this.value);
+            });
+          }
+
+          for (let j = 0; j < preferenceInputs.length; j++) {
+            preferenceInputs[j].addEventListener('change', function () {
+              syncBehaviorControl(control);
+            });
+          }
+
+          syncBehaviorControl(control);
+        }
+      }
+
+      function syncPreferenceProxyControls() {
+        syncPopupButtonStyleControl();
+
+        const behaviorControls = document.querySelectorAll('[data-behavior-control]');
+        for (let i = 0; i < behaviorControls.length; i++) {
+          syncBehaviorControl(behaviorControls[i]);
+        }
+      }
+
+      function schedulePreferenceProxySync() {
+        const delays = [0, 50, 250];
+        for (let i = 0; i < delays.length; i++) {
+          setTimeout(syncPreferenceProxyControls, delays[i]);
+        }
+      }
+
       function setPopupButtonGreyPreference(isGrey) {
         const preferenceInput = document.getElementById('popup-button-grey-preference');
-        if (!preferenceInput) return;
-
-        preferenceInput.checked = !!isGrey;
-        setPreference('popup_button_grey', !!isGrey);
-        dispatchPreferenceEvent(preferenceInput, 'input');
-        dispatchPreferenceEvent(preferenceInput, 'change');
+        setBooleanPreferenceInput(preferenceInput, !!isGrey);
       }
 
       function syncPopupButtonStyleControl() {
@@ -397,11 +716,12 @@
         });
 
         syncPopupButtonStyleControl();
-        setTimeout(syncPopupButtonStyleControl, 0);
       }
 
       initializePopupButtonStyleControl();
+      initializeBehaviorControls();
       initializeNumberPreferenceClamping();
+      schedulePreferenceProxySync();
 
       document.getElementById('reset-preferences').addEventListener('click', function () {
         Object.keys(preferenceDefaults).forEach(function (key) {
@@ -409,18 +729,7 @@
           const input = document.querySelector('[data-pref-key="' + key + '"]');
           if (!input) return;
 
-          if (input.type === 'checkbox') {
-            input.checked = value;
-          } else if (input.type === 'number') {
-            input.value = String(value);
-            input.setAttribute('value', String(value));
-          } else {
-            input.value = value;
-          }
-
-          setPreference(key, value);
-          dispatchPreferenceEvent(input, 'input');
-          dispatchPreferenceEvent(input, 'change');
+          setPreferenceInputValue(input, value, { persist: true, dispatch: true });
         });
       });
     </script>
