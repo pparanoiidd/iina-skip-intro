@@ -4,6 +4,25 @@
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 
+// lib/matcher.js
+import { createHash } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
+import {
+  access,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  utimes,
+  writeFile
+} from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { gzip, gunzip } from "node:zlib";
+import { promisify } from "node:util";
+
 // lib/math.js
 function mean(values) {
   if (!values.length) {
@@ -1326,12 +1345,20 @@ var CONSENSUS_END_INWARD_REFINEMENT_MAX_SECONDS = 0.5;
 var DIAGONAL_WALK_SECONDS = 12;
 var DIAGONAL_WALK_SCORE_TOLERANCE = 0.04;
 var DIAGONAL_WALK_DISTANCE_PENALTY = 6e-3;
+var FEATURE_CACHE_SCHEMA_VERSION = 1;
+var FEATURE_CACHE_ALGORITHM_VERSION = "audio-match-features-v1";
+var FEATURE_VECTOR_LENGTH = MEL_BANDS * 2;
+var DEFAULT_FEATURE_CACHE_MAX_BYTES = 1024 * 1024 * 1024;
+var gzipAsync = promisify(gzip);
+var gunzipAsync = promisify(gunzip);
 var DEFAULT_OPTIONS = {
   analyzeSeconds: ANALYZE_SECONDS,
   sampleRate: SAMPLE_RATE,
   minIntro: MIN_INTRO_SECONDS,
   maxIntro: MAX_INTRO_SECONDS,
-  minConfidence: 0.65
+  minConfidence: 0.65,
+  featureCacheDir: null,
+  featureCacheMaxBytes: DEFAULT_FEATURE_CACHE_MAX_BYTES
 };
 var IntroMatchError = class extends Error {
   constructor(code, message, details = {}) {
@@ -2328,7 +2355,193 @@ async function extractPcmMono16le(path, seconds, sampleRate, runCommand) {
   }
   return toInt16Array(result.stdout);
 }
-async function buildEpisodeFeatures(path, analyzeSeconds, sampleRate, runCommand) {
+function hashJson(value) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+function encodeFloat32Array(values) {
+  return Buffer.from(values.buffer, values.byteOffset, values.byteLength).toString("base64");
+}
+function decodeFloat32Array(encoded, expectedLength) {
+  const buffer = Buffer.from(encoded, "base64");
+  if (buffer.byteLength !== expectedLength * Float32Array.BYTES_PER_ELEMENT) {
+    throw new Error("Unexpected cached float array length.");
+  }
+  const array = new Float32Array(buffer.buffer, buffer.byteOffset, expectedLength);
+  return new Float32Array(array);
+}
+function flattenFloatRows(rows, width) {
+  const flattened = new Float32Array(rows.length * width);
+  for (let row = 0; row < rows.length; row += 1) {
+    if (rows[row].length !== width) {
+      throw new Error("Unexpected feature row width.");
+    }
+    flattened.set(rows[row], row * width);
+  }
+  return flattened;
+}
+function inflateFloatRows(flattened, width) {
+  const rows = [];
+  for (let offset = 0; offset < flattened.length; offset += width) {
+    rows.push(flattened.slice(offset, offset + width));
+  }
+  return rows;
+}
+function buildBoundaryDeltaPrefix(boundaryMel) {
+  const boundaryDelta = new Float32Array(boundaryMel.length);
+  for (let index = 1; index < boundaryMel.length; index += 1) {
+    boundaryDelta[index] = melFrameL2Distance(boundaryMel[index - 1], boundaryMel[index]);
+  }
+  return prefixSums(boundaryDelta);
+}
+function finalizeEpisodeFeatures({ path, frames, boundaryMel, rmsDb, volumeVariance }) {
+  return {
+    path,
+    frames,
+    boundaryMel,
+    rmsDb,
+    prefixRms: prefixSums(rmsDb),
+    boundaryDeltaPrefix: buildBoundaryDeltaPrefix(boundaryMel),
+    volumeVariance,
+    getMeanMelFrameDelta(startFrame, endFrame) {
+      return meanMelFrameDelta(this, startFrame, endFrame);
+    }
+  };
+}
+async function getCacheIdentity(path, analyzeSeconds, sampleRate) {
+  const canonicalPath = await realpath(path).catch(() => resolve(path));
+  const fileStat = await stat(canonicalPath);
+  const identity = {
+    schemaVersion: FEATURE_CACHE_SCHEMA_VERSION,
+    algorithmVersion: FEATURE_CACHE_ALGORITHM_VERSION,
+    pathHash: createHash("sha256").update(canonicalPath).digest("hex"),
+    size: fileStat.size,
+    mtimeMs: fileStat.mtimeMs,
+    analyzeSeconds,
+    sampleRate,
+    frameWindowSeconds: FRAME_WINDOW_SECONDS2,
+    frameHopSeconds: FRAME_HOP_SECONDS2,
+    melBands: MEL_BANDS,
+    featureVectorLength: FEATURE_VECTOR_LENGTH
+  };
+  return {
+    key: hashJson(identity),
+    identity
+  };
+}
+function getCacheFilePath(cacheDir, key) {
+  return join(cacheDir, `${key}.json.gz`);
+}
+function serializeEpisodeFeatures(episode, identity) {
+  const frameCount = episode.frames.length;
+  const payload = {
+    schemaVersion: FEATURE_CACHE_SCHEMA_VERSION,
+    algorithmVersion: FEATURE_CACHE_ALGORITHM_VERSION,
+    identity,
+    frameCount,
+    featureVectorLength: FEATURE_VECTOR_LENGTH,
+    melBands: MEL_BANDS,
+    frames: encodeFloat32Array(flattenFloatRows(episode.frames, FEATURE_VECTOR_LENGTH)),
+    boundaryMel: encodeFloat32Array(flattenFloatRows(episode.boundaryMel, MEL_BANDS)),
+    rmsDb: encodeFloat32Array(Float32Array.from(episode.rmsDb)),
+    volumeVariance: episode.volumeVariance
+  };
+  return payload;
+}
+function deserializeEpisodeFeatures(payload, path, identity) {
+  if (payload?.schemaVersion !== FEATURE_CACHE_SCHEMA_VERSION || payload.algorithmVersion !== FEATURE_CACHE_ALGORITHM_VERSION || JSON.stringify(payload.identity) !== JSON.stringify(identity)) {
+    throw new Error("Cached feature identity mismatch.");
+  }
+  const frameCount = payload.frameCount;
+  if (!Number.isInteger(frameCount) || frameCount <= 0 || payload.featureVectorLength !== FEATURE_VECTOR_LENGTH || payload.melBands !== MEL_BANDS) {
+    throw new Error("Invalid cached feature metadata.");
+  }
+  const frames = inflateFloatRows(
+    decodeFloat32Array(payload.frames, frameCount * FEATURE_VECTOR_LENGTH),
+    FEATURE_VECTOR_LENGTH
+  );
+  const boundaryMel = inflateFloatRows(
+    decodeFloat32Array(payload.boundaryMel, frameCount * MEL_BANDS),
+    MEL_BANDS
+  );
+  const rmsDb = Array.from(decodeFloat32Array(payload.rmsDb, frameCount));
+  return finalizeEpisodeFeatures({
+    path,
+    frames,
+    boundaryMel,
+    rmsDb,
+    volumeVariance: payload.volumeVariance
+  });
+}
+async function readEpisodeFeaturesFromCache(path, cacheDir, identity, key) {
+  const cacheFile = getCacheFilePath(cacheDir, key);
+  try {
+    const compressed = await readFile(cacheFile);
+    const json = await gunzipAsync(compressed);
+    const payload = JSON.parse(json.toString("utf8"));
+    await access(cacheFile, fsConstants.R_OK);
+    const episode = deserializeEpisodeFeatures(payload, path, identity);
+    const now = /* @__PURE__ */ new Date();
+    await utimes(cacheFile, now, now).catch(() => {
+    });
+    return episode;
+  } catch {
+    return null;
+  }
+}
+async function writeEpisodeFeaturesToCache(cacheDir, key, episode, identity) {
+  const cacheFile = getCacheFilePath(cacheDir, key);
+  const tempFile = `${cacheFile}.${process.pid}.tmp`;
+  try {
+    await mkdir(dirname(cacheFile), { recursive: true });
+    const payload = serializeEpisodeFeatures(episode, identity);
+    const compressed = await gzipAsync(Buffer.from(JSON.stringify(payload), "utf8"));
+    await writeFile(tempFile, compressed);
+    await rename(tempFile, cacheFile);
+  } catch {
+    await unlink(tempFile).catch(() => {
+    });
+  }
+}
+async function pruneFeatureCache(cacheDir, maxBytes) {
+  if (!cacheDir || !Number.isFinite(maxBytes) || maxBytes <= 0) {
+    return;
+  }
+  let entries;
+  try {
+    entries = await readdir(cacheDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const cacheFiles = [];
+  let totalBytes = 0;
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json.gz")) {
+      continue;
+    }
+    const path = join(cacheDir, entry.name);
+    try {
+      const fileStat = await stat(path);
+      totalBytes += fileStat.size;
+      cacheFiles.push({ path, bytes: fileStat.size, mtimeMs: fileStat.mtimeMs });
+    } catch {
+    }
+  }
+  if (totalBytes <= maxBytes) {
+    return;
+  }
+  cacheFiles.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  for (const entry of cacheFiles) {
+    if (totalBytes <= maxBytes) {
+      break;
+    }
+    try {
+      await unlink(entry.path);
+      totalBytes -= entry.bytes;
+    } catch {
+    }
+  }
+}
+async function buildEpisodeFeaturesUncached(path, analyzeSeconds, sampleRate, runCommand) {
   const pcm = await extractPcmMono16le(path, analyzeSeconds, sampleRate, runCommand);
   const frameSize = Math.trunc(sampleRate * FRAME_WINDOW_SECONDS2);
   const hopSize = Math.trunc(sampleRate * FRAME_HOP_SECONDS2);
@@ -2351,12 +2564,6 @@ async function buildEpisodeFeatures(path, analyzeSeconds, sampleRate, runCommand
     rmsDb.push(frameRmsDb);
   }
   const frames = buildNormalizedMatchFrames(melFrames);
-  const prefixRms = prefixSums(rmsDb);
-  const boundaryDelta = new Float32Array(melFrames.length);
-  for (let index = 1; index < melFrames.length; index += 1) {
-    boundaryDelta[index] = melFrameL2Distance(melFrames[index - 1], melFrames[index]);
-  }
-  const boundaryDeltaPrefix = prefixSums(boundaryDelta);
   let totalVolume = 0;
   for (const value of rmsDb) {
     totalVolume += value;
@@ -2366,26 +2573,35 @@ async function buildEpisodeFeatures(path, analyzeSeconds, sampleRate, runCommand
   for (const value of rmsDb) {
     variance += (value - avgVolume) ** 2;
   }
-  return {
+  return finalizeEpisodeFeatures({
     path,
     frames,
     boundaryMel: melFrames,
     rmsDb,
-    prefixRms,
-    boundaryDeltaPrefix,
-    volumeVariance: variance / rmsDb.length,
-    getMeanMelFrameDelta(startFrame, endFrame) {
-      return meanMelFrameDelta(this, startFrame, endFrame);
-    }
-  };
+    volumeVariance: variance / rmsDb.length
+  });
 }
-async function buildEpisodeSetFeatures(mainFile, refFiles, analyzeSeconds, sampleRate, runCommand) {
+async function buildEpisodeFeatures(path, analyzeSeconds, sampleRate, runCommand, featureCache) {
+  if (!featureCache?.dir) {
+    return buildEpisodeFeaturesUncached(path, analyzeSeconds, sampleRate, runCommand);
+  }
+  const { identity, key } = await getCacheIdentity(path, analyzeSeconds, sampleRate);
+  const cached = await readEpisodeFeaturesFromCache(path, featureCache.dir, identity, key);
+  if (cached) {
+    return cached;
+  }
+  const episode = await buildEpisodeFeaturesUncached(path, analyzeSeconds, sampleRate, runCommand);
+  await writeEpisodeFeaturesToCache(featureCache.dir, key, episode, identity);
+  return episode;
+}
+async function buildEpisodeSetFeatures(mainFile, refFiles, analyzeSeconds, sampleRate, runCommand, featureCache) {
   const [mainEpisode, ...refEpisodes] = await Promise.all([
-    buildEpisodeFeatures(mainFile, analyzeSeconds, sampleRate, runCommand),
+    buildEpisodeFeatures(mainFile, analyzeSeconds, sampleRate, runCommand, featureCache),
     ...refFiles.map(
-      (refFile) => buildEpisodeFeatures(refFile, analyzeSeconds, sampleRate, runCommand)
+      (refFile) => buildEpisodeFeatures(refFile, analyzeSeconds, sampleRate, runCommand, featureCache)
     )
   ]);
+  await pruneFeatureCache(featureCache?.dir, featureCache?.maxBytes);
   return {
     mainEpisode,
     refEpisodes
@@ -2520,12 +2736,17 @@ async function findIntroMatch({ mainFile, refFiles, options = {}, runCommand }) 
   reportProgress(onProgress, "checking_tools");
   await ensureToolAvailable("ffmpeg", runCommand);
   reportProgress(onProgress, "extracting_features");
+  const featureCache = resolved.featureCacheDir ? {
+    dir: resolved.featureCacheDir,
+    maxBytes: resolved.featureCacheMaxBytes
+  } : null;
   const { mainEpisode, refEpisodes } = await buildEpisodeSetFeatures(
     mainFile,
     refFiles,
     resolved.analyzeSeconds,
     resolved.sampleRate,
-    runCommand
+    runCommand,
+    featureCache
   );
   reportProgress(onProgress, "matching");
   const pipeline = runMatchingPipeline(
@@ -2614,6 +2835,7 @@ function parseArgs(argv) {
   let mainFile = null;
   let refFiles = [];
   let ffmpegPath = null;
+  let cacheDir = null;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const optionParser = OPTION_PARSERS[arg];
@@ -2643,6 +2865,16 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--cache-dir") {
+      cacheDir = readOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--cache-max-bytes") {
+      options.featureCacheMaxBytes = parseInteger(arg, readOptionValue(argv, index, arg));
+      index += 1;
+      continue;
+    }
     throw new IntroMatchError("INVALID_ARGUMENT", `Unknown argument: ${arg}`, { arg });
   }
   if (!mainFile || !Array.isArray(refFiles) || refFiles.length < 1 || refFiles.length > MAX_REFERENCE_FILES) {
@@ -2655,7 +2887,10 @@ function parseArgs(argv) {
   return {
     mainFile,
     refFiles,
-    options,
+    options: {
+      ...options,
+      ...cacheDir ? { featureCacheDir: cacheDir } : {}
+    },
     commandPaths: {
       ...ffmpegPath ? { ffmpeg: ffmpegPath } : {}
     }
@@ -2679,7 +2914,7 @@ function createRunCommand(commandPaths) {
   };
 }
 function spawnCommand({ command, args, stdoutMode = "text" }) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -2697,7 +2932,7 @@ function spawnCommand({ command, args, stdoutMode = "text" }) {
     });
     child.on("close", (code) => {
       const stdoutBuffer = Buffer.concat(stdoutChunks);
-      resolve({
+      resolve2({
         code: code ?? 1,
         stdout: stdoutMode === "bytes" ? new Uint8Array(stdoutBuffer) : stdoutBuffer.toString("utf8"),
         stderr: Buffer.concat(stderrChunks).toString("utf8")

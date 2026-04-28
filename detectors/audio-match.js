@@ -169,6 +169,15 @@ function createAudioMatchDetector(dependencies) {
     return null;
   }
 
+  function getAudioMatchCacheDir() {
+    try {
+      return iinaUtils.resolvePath('@data/audio-intro-match-cache');
+    } catch (error) {
+      logAudio('feature cache disabled: failed to resolve @data path: ' + error);
+      return null;
+    }
+  }
+
   function getCurrentMediaFile() {
     try {
       const items = getPlaylistItems();
@@ -489,6 +498,10 @@ function createAudioMatchDetector(dependencies) {
     const args = [helperPath, '--main', mainFile, '--refs-json', JSON.stringify(refs)];
     if (ffmpegPath) {
       args.push('--ffmpeg', ffmpegPath);
+    }
+    const cacheDir = getAudioMatchCacheDir();
+    if (cacheDir) {
+      args.push('--cache-dir', cacheDir);
     }
 
     logAudio('running helper with ' + refs.length + ' reference file(s)');
