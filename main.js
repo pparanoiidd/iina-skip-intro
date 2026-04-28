@@ -28,7 +28,7 @@ const SKIP_END_MIN_BUFFER_SECONDS = 0;
 const SKIP_END_MAX_BUFFER_SECONDS = 10;
 const DURATION_READ_DELAY_MS = 500;
 const DETECTION_MIN_DURATION = 10 * 60;
-const AUDIO_MATCH_MAX_DURATION = 90 * 60;
+const MOVIE_MIN_DURATION = 90 * 60;
 const AUDIO_MATCH_CHAPTER_SNAP_WINDOW = 3;
 const PREF_DETECT_CHAPTER_TITLES = 'detect_chapter_titles';
 const PREF_DETECT_INTROS = 'detect_intros';
@@ -94,8 +94,22 @@ function isDurationLongEnoughForDetection(duration) {
   return typeof duration === 'number' && isFinite(duration) && duration >= DETECTION_MIN_DURATION;
 }
 
-function isDurationShortEnoughForAudioMatching(duration) {
-  return typeof duration === 'number' && isFinite(duration) && duration <= AUDIO_MATCH_MAX_DURATION;
+function isMovieDuration(duration) {
+  return typeof duration === 'number' && isFinite(duration) && duration > MOVIE_MIN_DURATION;
+}
+
+function getDetectionOptionsForDuration(options, duration) {
+  if (!isMovieDuration(duration)) return options;
+
+  return {
+    detectChapterTitles: options.detectChapterTitles,
+    detectAudioMatching: false,
+    parseAudioMatchEpisodeNumbers: options.parseAudioMatchEpisodeNumbers,
+    detectChapterTiming: false,
+    detectIntros: false,
+    detectRecaps: false,
+    detectCredits: options.detectCredits,
+  };
 }
 
 function getBooleanPreference(key, fallbackValue) {
@@ -156,6 +170,18 @@ function isAudioMatchEpisodeParsingEnabled() {
 
 function isChapterTimingDetectionEnabled() {
   return getBooleanPreference(PREF_DETECT_CHAPTER_TIMING, false);
+}
+
+function getDetectionOptionsFromPreferences() {
+  return {
+    detectChapterTitles: isChapterTitleDetectionEnabled(),
+    detectAudioMatching: isAudioMatchingEnabled(),
+    parseAudioMatchEpisodeNumbers: isAudioMatchEpisodeParsingEnabled(),
+    detectChapterTiming: isChapterTimingDetectionEnabled(),
+    detectIntros: isIntroDetectionEnabled(),
+    detectRecaps: isRecapDetectionEnabled(),
+    detectCredits: isCreditDetectionEnabled(),
+  };
 }
 
 function getPopupAutoDismissSeconds() {
@@ -339,97 +365,90 @@ function snapAudioSectionGroupToChapters(sectionGroup, chapters) {
   });
 }
 
-async function detectCurrentSections() {
-  const runId = ++detectionRunId;
-  const options = {
-    detectChapterTitles: isChapterTitleDetectionEnabled(),
-    detectAudioMatching: isAudioMatchingEnabled(),
-    parseAudioMatchEpisodeNumbers: isAudioMatchEpisodeParsingEnabled(),
-    detectChapterTiming: isChapterTimingDetectionEnabled(),
-    detectIntros: isIntroDetectionEnabled(),
-    detectRecaps: isRecapDetectionEnabled(),
-    detectCredits: isCreditDetectionEnabled(),
-  };
+async function getDetectionContext(runId) {
+  await delay(DURATION_READ_DELAY_MS);
+  if (runId !== detectionRunId) return null;
 
-  if (!hasEnabledDetectionMethod(options)) {
-    detectedSections = [];
-    log('Skipping intro detection: all detection methods are disabled');
-    updateOverlay();
-    return;
+  const currentPath = getCurrentMediaPath();
+  if (!isVideoFilePath(currentPath)) {
+    return {
+      skipMessage: 'Skipping intro detection: current file is not a supported video file',
+    };
+  }
+
+  const duration = getDuration();
+  if (!isDurationLongEnoughForDetection(duration)) {
+    return {
+      skipMessage:
+        'Skipping intro detection: duration is unknown or below ' +
+        Math.round(DETECTION_MIN_DURATION / 60) +
+        ' minutes',
+    };
   }
 
   let chapters = [];
-  let duration = null;
+  try {
+    chapters = core.getChapters();
+  } catch (error) {
+    log('Chapter lookup failed: ' + error);
+  }
+
+  return {
+    chapters: chapters,
+    duration: duration,
+  };
+}
+
+function detectFromChapterTitles(context, options) {
+  try {
+    return detectSectionsFromChapterTitles(context.chapters, context.duration, options);
+  } catch (error) {
+    log('Chapter title intro detection failed: ' + error);
+    return [];
+  }
+}
+
+async function detectFromAudioMatch(context, options, runId) {
+  if (!options.detectAudioMatching) return [];
 
   try {
-    await delay(DURATION_READ_DELAY_MS);
-    if (runId !== detectionRunId) return;
-    const currentPath = getCurrentMediaPath();
-    if (!isVideoFilePath(currentPath)) {
-      detectedSections = [];
-      log('Skipping intro detection: current file is not a supported video file');
-      updateOverlay();
-      return;
+    const dependencyStatus = await getAudioMatchDependencyStatus();
+    if (runId !== detectionRunId) return null;
+
+    if (!dependencyStatus.ok) {
+      showAudioDependencyWarning(dependencyStatus.missing);
+      return [];
     }
 
-    duration = getDuration();
-    if (!isDurationLongEnoughForDetection(duration)) {
-      detectedSections = [];
-      log(
-        'Skipping intro detection: duration is unknown or below ' +
-          Math.round(DETECTION_MIN_DURATION / 60) +
-          ' minutes',
-      );
-      updateOverlay();
-      return;
-    }
-    chapters = core.getChapters();
-    detectedSections = detectSectionsFromChapterTitles(chapters, duration, options);
+    const audioSectionGroup = await detectSectionFromAudioMatch(options);
+    if (runId !== detectionRunId) return null;
+
+    return audioSectionGroup
+      ? [snapAudioSectionGroupToChapters(audioSectionGroup, context.chapters)]
+      : [];
   } catch (error) {
-    detectedSections = [];
-    log('Chapter title intro detection failed: ' + error);
+    if (runId !== detectionRunId) return null;
+    log('Audio intro detection failed: ' + error);
+    return [];
   }
+}
 
-  if (runId !== detectionRunId) return;
-
-  if (
-    !detectedSections.length &&
-    options.detectAudioMatching &&
-    isDurationShortEnoughForAudioMatching(duration)
-  ) {
-    try {
-      const dependencyStatus = await getAudioMatchDependencyStatus();
-      if (runId !== detectionRunId) return;
-      if (!dependencyStatus.ok) {
-        showAudioDependencyWarning(dependencyStatus.missing);
-        detectedSections = [];
-      } else {
-        const audioSectionGroup = await detectSectionFromAudioMatch(options);
-        if (runId !== detectionRunId) return;
-        detectedSections = audioSectionGroup
-          ? [snapAudioSectionGroupToChapters(audioSectionGroup, chapters)]
-          : [];
-      }
-    } catch (error) {
-      if (runId !== detectionRunId) return;
-      detectedSections = [];
-      log('Audio intro detection failed: ' + error);
-    }
-  } else if (!detectedSections.length && options.detectAudioMatching) {
-    log(
-      'Skipping audio intro detection: duration is above ' +
-        Math.round(AUDIO_MATCH_MAX_DURATION / 60) +
-        ' minutes',
-    );
+function detectFromChapterTiming(context, options) {
+  try {
+    return detectSectionsFromChapterTiming(context.chapters, context.duration, options);
+  } catch (error) {
+    log('Chapter timing intro detection failed: ' + error);
+    return [];
   }
+}
 
-  if (!detectedSections.length) {
-    try {
-      detectedSections = detectSectionsFromChapterTiming(chapters, duration, options);
-    } catch (error) {
-      detectedSections = [];
-      log('Chapter timing intro detection failed: ' + error);
-    }
+function finishDetection(sections, emptyMessage) {
+  detectedSections = Array.isArray(sections) ? sections : [];
+
+  if (emptyMessage) {
+    log(emptyMessage);
+    updateOverlay();
+    return;
   }
 
   if (!detectedSections.length) {
@@ -455,6 +474,43 @@ async function detectCurrentSections() {
   }
 
   updateOverlay();
+}
+
+async function detectCurrentSections() {
+  const runId = ++detectionRunId;
+  const initialOptions = getDetectionOptionsFromPreferences();
+
+  if (!hasEnabledDetectionMethod(initialOptions)) {
+    finishDetection([], 'Skipping intro detection: all detection methods are disabled');
+    return;
+  }
+
+  const context = await getDetectionContext(runId);
+  if (!context) return;
+  if (context.skipMessage) {
+    finishDetection([], context.skipMessage);
+    return;
+  }
+
+  const options = getDetectionOptionsForDuration(initialOptions, context.duration);
+  if (!hasEnabledDetectionMethod(options)) {
+    finishDetection(
+      [],
+      'Skipping intro detection: movie-length media only detects credits from chapter titles',
+    );
+    return;
+  }
+
+  let sections = detectFromChapterTitles(context, options);
+  if (!sections.length) {
+    sections = await detectFromAudioMatch(context, options, runId);
+    if (sections === null) return;
+  }
+  if (!sections.length) {
+    sections = detectFromChapterTiming(context, options);
+  }
+
+  finishDetection(sections);
 }
 
 function isPlaybackPaused() {

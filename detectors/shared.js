@@ -137,6 +137,8 @@ function classifyChapterTitle(title) {
     normalized === 'closing credits' ||
     normalized === 'final credits' ||
     normalized === 'staff credits' ||
+    normalized === 'credit roll' ||
+    normalized === 'credits roll' ||
     normalized === 'credits start' ||
     /^credits?\s+\d+$/.test(normalized) ||
     /^ed\s*\d*$/.test(normalized) ||
