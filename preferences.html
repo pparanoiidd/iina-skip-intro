@@ -77,6 +77,14 @@
         gap: 6px;
       }
 
+      .detection-option--stacked {
+        align-items: flex-start;
+      }
+
+      .detection-option--stacked > input {
+        margin-top: 2px;
+      }
+
       .detection-option__label {
         min-width: 58px;
       }
@@ -103,6 +111,14 @@
         gap: 6px;
       }
 
+      .global-option--stacked {
+        align-items: flex-start;
+      }
+
+      .global-option--stacked .global-option__label {
+        margin-top: 4px;
+      }
+
       .global-option__label {
         min-width: 112px;
       }
@@ -118,6 +134,24 @@
         margin-top: 0;
         padding: 0 6px;
         width: 50px;
+      }
+
+      .global-option input[type='text'] {
+        border: 1px solid rgba(128, 128, 128, 0.18);
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: 13px;
+        height: 26px;
+        line-height: normal;
+        margin-bottom: -2px;
+        margin-top: 0;
+        padding: 0 6px;
+        width: 118px;
+      }
+
+      .global-option input[type='text']::placeholder {
+        color: rgb(68, 68, 68);
+        opacity: 1;
       }
 
       .global-option input[type='number']::-webkit-inner-spin-button,
@@ -397,7 +431,7 @@
               </div>
             </div>
             <div class="detection-option">
-              <label class="detection-option">
+              <label class="detection-option detection-option--stacked">
                 <input
                   type="checkbox"
                   data-pref-key="audio_match_parse_episode_numbers"
@@ -476,6 +510,15 @@
             <label for="popup-button-grey">Grey</label>
           </div>
         </div>
+        <label class="global-option global-option--stacked">
+          <span class="global-option__label">Skip hotkey:</span>
+          <span class="detection-option__text">
+            <input type="text" data-pref-key="skip_key_binding" placeholder="TAB" />
+            <span class="detection-option__caption small secondary">
+              Optional mpv key name, for example TAB, s, S, or SHIFT+TAB.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div class="section-divider" aria-hidden="true"></div>
@@ -530,6 +573,7 @@
         auto_skip_first_episode_of_season: true,
         popup_auto_dismiss_seconds: 15,
         skip_end_buffer_seconds: 1,
+        skip_key_binding: '',
         popup_button_grey: false,
       };
 

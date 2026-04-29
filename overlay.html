@@ -109,8 +109,15 @@
 
       #box-wrap.visible #box::before {
         opacity: 1;
+        clip-path: var(--auto-dismiss-clip-path, inset(0 0 0 0));
         animation: var(--auto-dismiss-animation-name, auto-dismiss-progress) var(--auto-dismiss-ms)
           linear forwards;
+      }
+
+      #box-wrap.progress-frozen #box::before {
+        opacity: 1;
+        clip-path: var(--auto-dismiss-clip-path, inset(0 0 0 0));
+        animation: none;
       }
 
       #box-wrap.status #box {
@@ -192,6 +199,11 @@
       var clickable = true;
 
       function setVisible(visible) {
+        if (visible) {
+          boxWrap.classList.remove('progress-frozen');
+          box.style.removeProperty('--auto-dismiss-clip-path');
+        }
+
         boxWrap.classList.toggle('visible', !!visible);
         updateAutoDismissPaused();
       }
@@ -242,6 +254,15 @@
         }
       }
 
+      function freezeAutoDismissProgress() {
+        var style = window.getComputedStyle(box, '::before');
+        var clipPath = style && style.getPropertyValue('clip-path');
+        if (!clipPath || clipPath === 'none') return;
+
+        box.style.setProperty('--auto-dismiss-clip-path', clipPath);
+        boxWrap.classList.add('progress-frozen');
+      }
+
       function updateAutoDismissPaused() {
         var visible = boxWrap.classList.contains('visible');
         var interactionPaused = visible && box.matches(':hover, :focus');
@@ -258,6 +279,7 @@
 
       box.addEventListener('click', function () {
         if (!clickable) return;
+        freezeAutoDismissProgress();
         postMessage('skip');
       });
 
@@ -265,6 +287,7 @@
         if (!clickable) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
+          freezeAutoDismissProgress();
           postMessage('skip');
         }
       });

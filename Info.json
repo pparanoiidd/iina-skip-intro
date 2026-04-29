@@ -27,6 +27,7 @@
     "auto_skip_first_episode_of_season": true,
     "popup_auto_dismiss_seconds": 15,
     "skip_end_buffer_seconds": 1,
+    "skip_key_binding": "",
     "popup_button_grey": false
   },
   "permissions": ["video-overlay", "file-system"]

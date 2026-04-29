@@ -3,6 +3,7 @@ const event = iina.event;
 const mpv = iina.mpv;
 const overlay = iina.overlay;
 const preferences = iina.preferences;
+const input = iina.input;
 const console = iina.console;
 const file = iina.file;
 const iinaUtils = iina.utils;
@@ -56,6 +57,7 @@ const PREF_SHOW_AUTO_SKIP_STATUS = 'show_auto_skip_status';
 const PREF_AUTO_SKIP_FIRST_EPISODE_OF_SEASON = 'auto_skip_first_episode_of_season';
 const PREF_POPUP_AUTO_DISMISS_SECONDS = 'popup_auto_dismiss_seconds';
 const PREF_SKIP_END_BUFFER_SECONDS = 'skip_end_buffer_seconds';
+const PREF_SKIP_KEY_BINDING = 'skip_key_binding';
 const PREF_POPUP_BUTTON_GREY = 'popup_button_grey';
 
 let overlayReady = false;
@@ -71,6 +73,7 @@ let autoSkipStatusHideTimer = null;
 let dismissedSectionIds = Object.create(null);
 let detectionRunId = 0;
 let shownAudioDependencyWarningKey = null;
+let registeredSkipKeyBinding = null;
 
 function log(message) {
   console.log(message);
@@ -159,6 +162,15 @@ function getNumberPreference(key, fallbackValue) {
     if (isFinite(parsed)) return parsed;
   }
   return fallbackValue;
+}
+
+function getStringPreference(key, fallbackValue) {
+  if (!preferences || typeof preferences.get !== 'function') {
+    return fallbackValue;
+  }
+
+  const value = preferences.get(key);
+  return typeof value === 'string' ? value : fallbackValue;
 }
 
 function clampNumber(value, min, max) {
@@ -255,6 +267,10 @@ function shouldAutoSkipFirstEpisodeOfSeason() {
 
 function getPopupButtonStyle() {
   return getBooleanPreference(PREF_POPUP_BUTTON_GREY, false) ? 'grey' : 'white';
+}
+
+function getSkipKeyBinding() {
+  return getStringPreference(PREF_SKIP_KEY_BINDING, '').trim();
 }
 
 function formatAudioDependencyName(dependency) {
@@ -705,9 +721,52 @@ function skipSection(sectionGroup, reason, options) {
   }
 }
 
+function handleSkipKeyDown(data) {
+  if (!overlayVisible || overlayMode !== 'prompt' || !currentOverlaySection) {
+    return false;
+  }
+
+  if (data && data.isRepeat) {
+    return true;
+  }
+
+  skipSection(currentOverlaySection, 'Skip requested from key binding');
+  return true;
+}
+
+function unregisterSkipKeyBinding() {
+  if (!registeredSkipKeyBinding || !input || typeof input.onKeyDown !== 'function') return;
+
+  try {
+    input.onKeyDown(registeredSkipKeyBinding, null);
+  } catch (error) {
+    log('Skip key binding unregister failed: ' + error);
+  }
+  registeredSkipKeyBinding = null;
+}
+
+function syncSkipKeyBinding() {
+  if (!input || typeof input.onKeyDown !== 'function') return;
+
+  const keyBinding = getSkipKeyBinding();
+  if (keyBinding === registeredSkipKeyBinding) return;
+
+  unregisterSkipKeyBinding();
+  if (!keyBinding) return;
+
+  try {
+    input.onKeyDown(keyBinding, handleSkipKeyDown);
+    registeredSkipKeyBinding = keyBinding;
+    log('Registered skip key binding: ' + keyBinding);
+  } catch (error) {
+    log('Skip key binding registration failed for "' + keyBinding + '": ' + error);
+  }
+}
+
 function registerHandlers() {
   if (handlersRegistered) return;
   handlersRegistered = true;
+  syncSkipKeyBinding();
 
   overlay.onMessage('skip', function () {
     skipSection(currentOverlaySection, 'Skip requested');
@@ -823,6 +882,8 @@ function getActiveSection(position, leadInSeconds) {
 
 function updateOverlay(position) {
   if (!overlayReady) return;
+  syncSkipKeyBinding();
+
   if (typeof position !== 'number') {
     position = getPosition();
   }

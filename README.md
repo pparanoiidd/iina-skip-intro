@@ -22,7 +22,7 @@ It detects sections through three different methods: chapter titles, audio finge
 - Uses three detection methods: chapter titles, audio fingerprint analysis and chapter timings.
 - Optional Auto-Skip for mouse-free skipping.
 - Customize detection and skip behavior through the preferences page.
-- Configurable skip pop-up timeout, end buffer, button styling and more.
+- Configurable skip pop-up timeout, end buffer, button styling, hotkey and more.
 
 ## Screenshots
 
@@ -74,7 +74,7 @@ For chapter title matches, intros, recaps and credits can each be set to Off, Pr
 
 ### Audio Fingerprint Detection
 
-Compares the current episode with nearby playlist episodes and looks for shared audio that appears in the same broad region. This is intended for shows where episodes share the same intro but do not have helpful chapter titles.
+Compares the current episode with nearby playlist episodes and looks for shared audio that appears in the same broad region. This is intended for shows where episodes share the same intro but do not have helpful chapter titles. It requires at least 2 episodes.
 
 The matcher:
 
