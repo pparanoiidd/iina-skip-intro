@@ -1,7 +1,9 @@
 {
   "name": "Skip Intro",
   "identifier": "com.pparanoiidd.skipintro",
-  "version": "0.7.0",
+  "version": "1.0.0",
+  "ghRepo": "pparanoiidd/iina-skip-intro",
+  "ghVersion": 1,
   "author": {
     "name": "pparanoiidd"
   },
