@@ -6,7 +6,7 @@ Skip Intro adds intro, recap and credits skipping to <a href="https://iina.io/">
 
 <p align="center">
 <a href="#features">Features</a> ·
-<a href="#screenshots">Screenshots</a> ·
+<a href="#preview">Preview</a> ·
 <a href="#installation">Installation</a> ·
 <a href="#detection-methods">Detection Methods</a> ·
 <a href="#troubleshooting">Troubleshooting</a>
@@ -14,7 +14,7 @@ Skip Intro adds intro, recap and credits skipping to <a href="https://iina.io/">
 
 ---
 
-It detects sections through three different methods: chapter titles, audio fingerprint analysis, or chapter timings, then either shows a skip pop-up or auto-skips based on your preferences.
+This plugin gives people who watch shows and movies locally a streaming-style way to skip intros and other sections. It detects sections through three different methods: chapter titles, audio fingerprint analysis, or chapter timings, then either shows a skip pop-up or auto-skips based on your preferences.
 
 ## Features
 
@@ -24,9 +24,20 @@ It detects sections through three different methods: chapter titles, audio finge
 - Customize detection and skip behavior through the preferences page.
 - Configurable skip pop-up timeout, end buffer, button styling, hotkey and more.
 
-## Screenshots
+## Preview
+
+<p align="center"><img width="360" alt="Skip Intro pop-up appearing and dismissing" src="https://github.com/user-attachments/assets/1eaf9426-0c4f-43ac-97fd-d42523cbf948"/></p>
 
 ## Installation
+
+### Install the Plugin
+
+1. Install and open [IINA](https://iina.io/), then go to `Settings -> Plugins` from the menu bar.
+2. Choose `Install from GitHub...`.
+3. Paste `pparanoiidd/iina-skip-intro` and install.
+   > **Note:** See [Permissions](#permissions) for why the plugin asks for each permission.
+4. Restart IINA.
+5. Open `Settings -> Plugins -> Skip Intro -> Preferences` to choose detection methods and skip behavior.
 
 ### Optional: Enable Audio Fingerprint Matching
 
@@ -51,20 +62,11 @@ Then paste this in your Terminal to install the prerequisites:
 brew install node ffmpeg
 ```
 
-### Install the Plugin
-
-1. Install and open [IINA](https://iina.io/), then go to `Settings -> Plugins` from the menu bar.
-2. Choose `Install from GitHub...`.
-3. Paste `pparanoiidd/iina-skip-intro` and install.
-   > **Note:** See [Permissions](#permissions) for why the plugin asks for each permission.
-4. Restart IINA.
-5. Open `Settings -> Plugins -> Skip Intro -> Preferences` to choose detection methods and skip behavior.
-
 ## Detection Methods
 
 Detection methods run in this order and stop after the first match. By default, only chapter title detection is enabled. You can enable or disable any method in Preferences.
 
-### Chapter Title Detection
+### 1. Chapter Title Detection
 
 Uses chapter names such as `Intro`, `OP`, `Opening`, `Recap`, `Previously On`, `Credits`, `ED`, and related variants. This is the fastest and most reliable method when the file has useful chapters.
 
@@ -72,7 +74,7 @@ Title-detected intros must start near the beginning of the video and have a reas
 
 For chapter title matches, intros, recaps and credits can each be set to Off, Prompt or Auto-Skip.
 
-### Audio Fingerprint Detection
+### 2. Audio Fingerprint Detection
 
 Compares the current episode with nearby playlist episodes and looks for shared audio that appears in the same broad region. This is intended for shows where episodes share the same intro but do not have helpful chapter titles. It requires at least 2 episodes.
 
@@ -86,7 +88,7 @@ The matcher:
 
 When enabled, audio matching looks for intro-length shared audio between 20 and 150 seconds long and requires a confidence threshold before accepting a match. It is disabled by default because it is an advanced optional feature and requires Node.js and FFmpeg.
 
-### Chapter Timing Detection
+### 3. Chapter Timing Detection
 
 Uses chapter structure as a lower-confidence fallback. It looks for an early chapter with intro-like duration followed by a much longer chapter, then scores candidates by position, duration and next-chapter dominance.
 
@@ -104,7 +106,7 @@ If the plugin is not working as expected, check IINA's logs:
 
 1. Open `Settings -> Advanced`.
 2. Enable `Advanced settings`.
-3. Enable `Logging` and restart.
+3. Enable `Logging` and restart IINA.
 4. Play the problem video so the plugin can run and write log entries.
 5. Open logs with `Ctrl + Cmd + L`.
 6. Set `Subsystem` to `Skip Intro`.
