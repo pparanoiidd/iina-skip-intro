@@ -6,33 +6,46 @@ Skip Intro adds intro, recap and credits skipping to <a href="https://iina.io/">
 
 <p align="center">
 <a href="#features">Features</a> ·
-<a href="#installation">Installation</a> ·
 <a href="#screenshots">Screenshots</a> ·
+<a href="#installation">Installation</a> ·
 <a href="#detection-methods">Detection Methods</a> ·
-<a href="#preferences">Preferences</a>
+<a href="#troubleshooting">Troubleshooting</a>
 </p>
 
 ---
 
-It detects sections through 3 different methods: chapter titles, audio fingerprint analysis, or chapter timings, then either shows a skip pop-up or auto-skips based on your preferences.
+It detects sections through three different methods: chapter titles, audio fingerprint analysis, or chapter timings, then either shows a skip pop-up or auto-skips based on your preferences.
 
 ## Features
 
 - Skip prompts for intros, recaps and credits.
-- Uses 3 different detection methods: chapter titles, audio fingerprint analysis and chapter timings
-- Optional Auto-Skip for mouse free skipping.
-- Customise to your needs through the preferences page.
-- White or grey pop-up style options.
+- Uses three detection methods: chapter titles, audio fingerprint analysis and chapter timings.
+- Optional Auto-Skip for mouse-free skipping.
+- Customize detection and skip behavior through the preferences page.
+- Configurable skip pop-up timeout, end buffer, button styling and more.
+
+## Screenshots
 
 ## Installation
 
-### Recommended Audio Matching Dependencies
+### Optional: Enable Audio Fingerprint Matching
 
 > [!IMPORTANT]
-> **Optional but recommended:** Install Node.js and ffmpeg to enable audio fingerprint detection.
-> If audio matching is enabled and either dependency is missing, the plugin shows a warning and logs the missing dependency, but otherwise still works.
+> Audio fingerprint matching is an advanced optional feature.
+> Many shows do not include useful chapter titles, so audio matching greatly expands the media files this plugin can support when episodes reuse the same intro audio.
 
-Install them with Homebrew from Terminal:
+#### Prerequisites
+
+Audio fingerprint matching requires:
+
+- Node.js
+- FFmpeg
+
+Installing them with Homebrew:
+
+If you do not have Homebrew installed, install it from [brew.sh](https://brew.sh/) first, following the instructions shown by the Homebrew installer.
+
+Then paste this in your Terminal to install the prerequisites:
 
 ```console
 brew install node ffmpeg
@@ -40,25 +53,24 @@ brew install node ffmpeg
 
 ### Install the Plugin
 
-1. Install [IINA](https://iina.io/) on macOS.
-2. Open IINA, then go to `Settings -> Plugins` from the menu bar.
-3. Choose `Install from GitHub...`.
-4. Paste `pparanoiidd/iina-skip-intro` and install.
+1. Install and open [IINA](https://iina.io/), then go to `Settings -> Plugins` from the menu bar.
+2. Choose `Install from GitHub...`.
+3. Paste `pparanoiidd/iina-skip-intro` and install.
    > **Note:** See [Permissions](#permissions) for why the plugin asks for each permission.
-5. Restart IINA.
-6. Open `Settings -> Plugins -> Skip Intro -> Preferences` to tweak settings.
-
-## Screenshots
+4. Restart IINA.
+5. Open `Settings -> Plugins -> Skip Intro -> Preferences` to choose detection methods and skip behavior.
 
 ## Detection Methods
 
-Detection methods run in this order and stop after the first match. You can disable any method you do not want running in Preferences.
+Detection methods run in this order and stop after the first match. By default, only chapter title detection is enabled. You can enable or disable any method in Preferences.
 
 ### Chapter Title Detection
 
 Uses chapter names such as `Intro`, `OP`, `Opening`, `Recap`, `Previously On`, `Credits`, `ED`, and related variants. This is the fastest and most reliable method when the file has useful chapters.
 
 Title-detected intros must start near the beginning of the video and have a reasonable duration. Credits are only accepted near the end of the video, with duration limits scaled by runtime.
+
+For chapter title matches, intros, recaps and credits can each be set to Off, Prompt or Auto-Skip.
 
 ### Audio Fingerprint Detection
 
@@ -72,7 +84,7 @@ The matcher:
 - Analyzes the early part of each episode and refines boundaries.
 - Caches extracted audio features so repeat scans are faster.
 
-By default, audio matching looks for intro-length shared audio between 20 and 150 seconds long and requires a confidence threshold before accepting a match.
+When enabled, audio matching looks for intro-length shared audio between 20 and 150 seconds long and requires a confidence threshold before accepting a match. It is disabled by default because it is an advanced optional feature and requires Node.js and FFmpeg.
 
 ### Chapter Timing Detection
 
@@ -86,41 +98,20 @@ This method can misfire, so it is disabled by default.
 - Videos longer than 90 minutes are treated as movie-length media. For those files, the plugin only allows credit detection from chapter titles.
 - Audio fingerprint matching analyzes the early portion of an episode and accepts shared intro candidates from 20 to 150 seconds long.
 
-## Preferences
-
-Intro detection methods:
-
-- `Chapter title detection`: enable or disable title-based chapter scanning.
-- `Chapter title intros`: Off, Prompt, or Auto-Skip.
-- `Chapter title recaps`: Off, Prompt, or Auto-Skip.
-- `Chapter title credits`: Off, Prompt, or Auto-Skip.
-- `Audio fingerprint detection`: enable or disable audio matching.
-- `Audio fingerprint intros`: Prompt or Auto-Skip.
-- `Use season and episode numbers from filenames`: helps audio matching choose better reference episodes.
-- `Chapter timing detection`: enable or disable the fallback timing heuristic.
-
-Skip pop-up:
-
-- `Auto hide after`: 5 to 20 seconds.
-- `Leave at end`: 0 to 10 seconds before the detected section end.
-- `Skip button style`: White or Grey.
-
-Auto-Skip:
-
-- `Auto-Skip delay`: 0 to 10 seconds after the detected section starts.
-- `Show Auto-Skip status pop-up`: show pending and complete status while auto-skipping.
-- `Auto-Skip first episode of the season`: allow or prevent automatic intro skipping on episode 1 of a season.
-
 ## Troubleshooting
 
 If the plugin is not working as expected, check IINA's logs:
 
-- Open logs with `Ctrl + Cmd + L`.
-- Set `Subsystem` to `Skip Intro`.
+1. Open `Settings -> Advanced`.
+2. Enable `Advanced settings`.
+3. Enable `Logging` and restart.
+4. Play the problem video so the plugin can run and write log entries.
+5. Open logs with `Ctrl + Cmd + L`.
+6. Set `Subsystem` to `Skip Intro`.
 
 Useful things to look for:
 
-- Missing `node` or `ffmpeg` warnings.
+- Missing `node` or `ffmpeg` warnings. See [Optional: Enable Audio Fingerprint Matching](#optional-enable-audio-fingerprint-matching) for setup instructions.
 - Audio detection messages about playlist references, helper lookup, confidence, or rejected matches.
 
 The plugin checks for audio matching dependencies in these locations:
@@ -128,12 +119,11 @@ The plugin checks for audio matching dependencies in these locations:
 - `ffmpeg`: `/opt/homebrew/bin/ffmpeg`, `/usr/local/bin/ffmpeg`
 - `node`: `/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node`
 
-Audio fingerprint detection is not perfect. It works best when nearby episodes share the same intro audio and are loaded together in the playlist. It may miss intros with major audio changes, unusual episode ordering, poor filename parsing, or too few neighbouring reference episodes.
+Audio fingerprint detection is not perfect. It works best when nearby episodes share the same intro audio and are loaded together in the playlist. It may miss intros with unusual episode ordering, poor filename parsing, too few neighbouring reference episodes or even humanly inaudible audio differences.
 
 ## Permissions
 
 The plugin requests:
 
-- `video-overlay` to render the skip prompt over the video.
 - `file-system` to find the bundled audio matcher, inspect local playlist items, check for dependencies, and use the audio feature cache.
-- `show-osd` to show a warning when audio matching dependencies are missing.
+- `video-overlay` to render the skip prompt over the video.

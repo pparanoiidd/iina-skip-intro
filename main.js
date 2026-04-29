@@ -182,7 +182,7 @@ function isChapterTitleDetectionEnabled() {
 }
 
 function isAudioMatchingEnabled() {
-  return getBooleanPreference(PREF_DETECT_AUDIO_MATCHING, true);
+  return getBooleanPreference(PREF_DETECT_AUDIO_MATCHING, false);
 }
 
 function isAudioMatchEpisodeParsingEnabled() {
@@ -279,16 +279,8 @@ function showAudioDependencyWarning(missingDependencies) {
   const message =
     'Skip Intro: audio fingerprint detection needs ' +
     formatAudioDependencyList(missingDependencies) +
-    '. Disable audio matching in settings to hide this.';
+    '. See README.md for setup instructions, or disable audio matching in settings to hide this.';
   log(message);
-
-  try {
-    if (core && typeof core.osd === 'function') {
-      core.osd(message);
-    }
-  } catch (error) {
-    log('Audio dependency warning OSD failed: ' + error);
-  }
 }
 
 function hasEnabledDetectionMethod(options) {
