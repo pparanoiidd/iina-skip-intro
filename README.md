@@ -1,7 +1,7 @@
 <h1 align="center">Skip Intro plugin for IINA</h1>
 
 <p align="center">
-Skip Intro adds intro, recap and credits skipping to <a href="https://iina.io/">IINA</a>, the modern media player for macOS.
+Skip Intro adds intro, recap and credits skipping to <a href="https://github.com/iina/iina">IINA</a>, the modern media player for macOS.
 </p>
 
 <p align="center">
@@ -73,6 +73,8 @@ Uses chapter names such as `Intro`, `OP`, `Opening`, `Recap`, `Previously On`, `
 Title-detected intros must start near the beginning of the video and have a reasonable duration. Credits are only accepted near the end of the video, with duration limits scaled by runtime.
 
 For chapter title matches, intros, recaps and credits can each be set to Off, Prompt or Auto-Skip.
+
+Custom titles can be added in properties.
 
 ### 2. Audio Fingerprint Detection
 

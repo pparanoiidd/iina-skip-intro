@@ -438,7 +438,7 @@ function createAudioMatchDetector(dependencies) {
     );
   }
 
-  function buildAudioMatchSectionGroup(output) {
+  function buildAudioMatchSection(output) {
     const start = output.intro.start_seconds;
     const end = output.intro.end_seconds;
     const id = 'audio-intro-' + Math.round(start * 1000) + '-' + Math.round(end * 1000);
@@ -447,17 +447,11 @@ function createAudioMatchDetector(dependencies) {
       id: id,
       start: start,
       end: end,
-      sections: [
-        {
-          start: start,
-          end: end,
-          titles: ['Audio fingerprint intro'],
-          source: SECTION_SOURCE_AUDIO_FINGERPRINT,
-          kind: SECTION_KIND_INTRO,
-          confidence: output.confidence || null,
-          sharedAudio: output.shared_audio || null,
-        },
-      ],
+      titles: ['Audio fingerprint intro'],
+      source: SECTION_SOURCE_AUDIO_FINGERPRINT,
+      kind: SECTION_KIND_INTRO,
+      confidence: output.confidence || null,
+      sharedAudio: output.shared_audio || null,
     };
   }
 
@@ -541,7 +535,7 @@ function createAudioMatchDetector(dependencies) {
       logAudio('matcher returned an invalid intro result');
     }
 
-    return isValidAudioMatchOutput(output) ? buildAudioMatchSectionGroup(output) : null;
+    return isValidAudioMatchOutput(output) ? buildAudioMatchSection(output) : null;
   }
 
   return {

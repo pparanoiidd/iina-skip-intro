@@ -13,8 +13,7 @@ const {
 
 const INTRO_MAX_START = 300;
 const INTRO_MIN_DURATION = 15;
-const INTRO_SINGLE_MAX_DURATION = 140;
-const INTRO_COMBINED_MAX_DURATION = 240;
+const INTRO_MAX_DURATION = 140;
 
 const CREDITS_MIN_DURATION = 30;
 const CREDITS_MIN_RUNTIME = 15 * 60;
@@ -45,13 +44,12 @@ function getCreditsMaxDuration(duration) {
   return scaleByRuntime(duration, CREDITS_MIN_MAX_DURATION, CREDITS_MAX_MAX_DURATION);
 }
 
-function isValidTitleSection(start, end, duration, titleCount) {
+function isValidTitleSection(start, end, duration) {
   if (start === null || !isSectionStartInRange(start, duration, INTRO_MAX_START)) return false;
   if (end === null || end <= start) return false;
 
   const sectionDuration = end - start;
-  const maxDuration = titleCount > 1 ? INTRO_COMBINED_MAX_DURATION : INTRO_SINGLE_MAX_DURATION;
-  return sectionDuration >= INTRO_MIN_DURATION && sectionDuration <= maxDuration;
+  return sectionDuration >= INTRO_MIN_DURATION && sectionDuration <= INTRO_MAX_DURATION;
 }
 
 function isValidCreditsTitleSection(start, end, duration) {
@@ -68,9 +66,9 @@ function isValidCreditsTitleSection(start, end, duration) {
   );
 }
 
-function hasLaterSpecificIntroChapterTitle(chapters, index) {
+function hasLaterSpecificIntroChapterTitle(chapters, index, options) {
   for (let i = index + 1; i < chapters.length; i++) {
-    if (isSpecificIntroChapterTitle(chapters[i].title)) {
+    if (isSpecificIntroChapterTitle(chapters[i].title, options)) {
       return true;
     }
   }
@@ -83,7 +81,7 @@ function collectSectionsFromChapterTitles(chapters, duration, options) {
 
   const sections = [];
   for (let i = 0; i < chapters.length; ) {
-    const kind = classifyChapterTitle(chapters[i].title);
+    const kind = classifyChapterTitle(chapters[i].title, options);
     if (!isAllowedTitleKind(kind, options)) {
       i++;
       continue;
@@ -91,7 +89,7 @@ function collectSectionsFromChapterTitles(chapters, duration, options) {
     if (
       kind === SECTION_KIND_INTRO &&
       isPlainIntroChapterTitle(chapters[i].title) &&
-      hasLaterSpecificIntroChapterTitle(chapters, i)
+      hasLaterSpecificIntroChapterTitle(chapters, i, options)
     ) {
       i++;
       continue;
@@ -99,14 +97,17 @@ function collectSectionsFromChapterTitles(chapters, duration, options) {
 
     const titles = [chapters[i].title || ''];
     const start = getChapterStart(chapters[i]);
-    const end = i + 1 < chapters.length ? getChapterStart(chapters[i + 1]) : duration;
+    let end = i + 1 < chapters.length ? getChapterStart(chapters[i + 1]) : duration;
+    // Trimmed files can retain a credits-end marker beyond their actual runtime.
+    if (kind === SECTION_KIND_CREDITS && end !== null) end = Math.min(end, duration);
     const isValid =
       kind === SECTION_KIND_CREDITS
         ? isValidCreditsTitleSection(start, end, duration)
-        : isValidTitleSection(start, i + 1 < chapters.length ? end : null, duration, titles.length);
+        : isValidTitleSection(start, i + 1 < chapters.length ? end : null, duration);
 
     if (isValid) {
       sections.push({
+        id: 'section-' + (sections.length + 1),
         start: start,
         end: end,
         titles: titles,
@@ -121,26 +122,11 @@ function collectSectionsFromChapterTitles(chapters, duration, options) {
   return sections;
 }
 
-function createStandaloneSectionGroups(sections) {
-  if (!Array.isArray(sections) || !sections.length) return [];
-
-  return sections.map(function (section, index) {
-    return {
-      id: 'section-' + (index + 1),
-      start: section.start,
-      end: section.end,
-      sections: [section],
-    };
-  });
-}
-
 function detectSectionsFromChapterTitles(chapters, duration, options) {
   const resolvedOptions = getDetectionOptions(options);
-  const titleSections = resolvedOptions.detectTitleSections
-    ? collectSectionsFromChapterTitles(chapters, duration, resolvedOptions) || []
+  return resolvedOptions.detectTitleSections
+    ? collectSectionsFromChapterTitles(chapters, duration, resolvedOptions)
     : [];
-
-  return createStandaloneSectionGroups(titleSections);
 }
 
 module.exports = {

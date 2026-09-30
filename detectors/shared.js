@@ -5,7 +5,6 @@ const SECTION_KIND_SECTION = 'section';
 const SECTION_SOURCE_TITLE = 'title';
 const SECTION_SOURCE_TIMING = 'timing';
 const SECTION_SOURCE_AUDIO_FINGERPRINT = 'audio-fingerprint';
-const SECTION_GROUP_MAX_GAP = 1;
 const INTRO_MAX_START_RATIO = 0.25;
 const VIDEO_FILE_EXTENSIONS = Object.freeze([
   'mkv',
@@ -321,7 +320,17 @@ function normalizeChapterTitle(title) {
     .replace(/^[\s:;,.!?-]+|[\s:;,.!?-]+$/g, '');
 }
 
-function classifyChapterTitle(title) {
+function parseExtraChapterTitles(value) {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map(normalizeChapterTitle)
+    .filter(function (title, index, titles) {
+      return title && titles.indexOf(title) === index;
+    });
+}
+
+function classifyChapterTitle(title, options) {
   const normalized = normalizeChapterTitle(title);
   if (!normalized) return null;
 
@@ -366,6 +375,14 @@ function classifyChapterTitle(title) {
     return SECTION_KIND_CREDITS;
   }
 
+  // Built-in titles take precedence. Custom conflicts use intro, recap, credits order.
+  const extraTitles = options && options.extraChapterTitles;
+  const kinds = [SECTION_KIND_INTRO, SECTION_KIND_RECAP, SECTION_KIND_CREDITS];
+  for (let i = 0; extraTitles && i < kinds.length; i++) {
+    const kind = kinds[i];
+    if (extraTitles[kind] && extraTitles[kind].indexOf(normalized) !== -1) return kind;
+  }
+
   return null;
 }
 
@@ -373,8 +390,8 @@ function isPlainIntroChapterTitle(title) {
   return normalizeChapterTitle(title) === 'intro';
 }
 
-function isSpecificIntroChapterTitle(title) {
-  return classifyChapterTitle(title) === SECTION_KIND_INTRO && !isPlainIntroChapterTitle(title);
+function isSpecificIntroChapterTitle(title, options) {
+  return classifyChapterTitle(title, options) === SECTION_KIND_INTRO && !isPlainIntroChapterTitle(title);
 }
 
 function getDetectionOptions(options) {
@@ -384,6 +401,11 @@ function getDetectionOptions(options) {
     detectCredits: !options || options.detectCredits !== false,
     detectTitleSections: !options || options.detectChapterTitles !== false,
     detectTimingSections: !!(options && options.detectChapterTiming),
+    extraChapterTitles: {
+      intro: parseExtraChapterTitles(options && options.extraIntroTitles),
+      recap: parseExtraChapterTitles(options && options.extraRecapTitles),
+      credits: parseExtraChapterTitles(options && options.extraCreditsTitles),
+    },
   };
 }
 
@@ -397,35 +419,6 @@ function isAllowedTitleKind(kind, options) {
 
 function isSectionStartInRange(start, duration, maxStart) {
   return start >= 0 && start <= maxStart && start <= duration * INTRO_MAX_START_RATIO;
-}
-
-function groupConnectedSections(sections) {
-  if (!Array.isArray(sections) || !sections.length) return [];
-
-  const sortedSections = sections.slice().sort(function (a, b) {
-    return a.start - b.start || a.end - b.end;
-  });
-
-  const groups = [];
-  for (let i = 0; i < sortedSections.length; i++) {
-    const section = sortedSections[i];
-    const currentGroup = groups.length ? groups[groups.length - 1] : null;
-
-    if (!currentGroup || section.start > currentGroup.end + SECTION_GROUP_MAX_GAP) {
-      groups.push({
-        id: 'section-' + (groups.length + 1),
-        start: section.start,
-        end: section.end,
-        sections: [section],
-      });
-      continue;
-    }
-
-    currentGroup.end = Math.max(currentGroup.end, section.end);
-    currentGroup.sections.push(section);
-  }
-
-  return groups;
 }
 
 module.exports = {
@@ -445,7 +438,6 @@ module.exports = {
   getLocalFilePath: getLocalFilePath,
   parseSeasonEpisode: parseSeasonEpisode,
   formatParsedSeasonEpisode: formatParsedSeasonEpisode,
-  groupConnectedSections: groupConnectedSections,
   isPlainIntroChapterTitle: isPlainIntroChapterTitle,
   isAllowedTitleKind: isAllowedTitleKind,
   isSectionStartInRange: isSectionStartInRange,

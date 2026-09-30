@@ -7,7 +7,6 @@ const {
   getChapterEnd,
   getChapterStart,
   getDetectionOptions,
-  groupConnectedSections,
   isSectionStartInRange,
 } = require('./shared.js');
 
@@ -218,6 +217,7 @@ function detectSectionFromChapterTiming(chapters, duration, options) {
   }
 
   return {
+    id: 'section-1',
     start: winner.candidate.start,
     end: winner.candidate.end,
     titles: [winner.candidate.chapter.title || ''],
@@ -235,7 +235,7 @@ function detectSectionsFromChapterTiming(chapters, duration, options) {
     ? detectSectionFromChapterTiming(chapters, duration, resolvedOptions)
     : null;
 
-  return timingSection ? groupConnectedSections([timingSection]) : [];
+  return timingSection ? [timingSection] : [];
 }
 
 module.exports = {

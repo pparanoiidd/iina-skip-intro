@@ -48,6 +48,9 @@ const PREF_AUDIO_MATCH_PARSE_EPISODE_NUMBERS = 'audio_match_parse_episode_number
 const PREF_DETECT_CHAPTER_TIMING = 'detect_chapter_timing';
 const PREF_DETECT_RECAPS = 'detect_recaps';
 const PREF_DETECT_CREDITS = 'detect_credits';
+const PREF_EXTRA_INTRO_TITLES = 'extra_intro_titles';
+const PREF_EXTRA_RECAP_TITLES = 'extra_recap_titles';
+const PREF_EXTRA_CREDITS_TITLES = 'extra_credits_titles';
 const PREF_AUTO_SKIP_TITLE_INTROS = 'auto_skip_title_intros';
 const PREF_AUTO_SKIP_TITLE_RECAPS = 'auto_skip_title_recaps';
 const PREF_AUTO_SKIP_TITLE_CREDITS = 'auto_skip_title_credits';
@@ -133,6 +136,9 @@ function getDetectionOptionsForDuration(options, duration) {
     detectIntros: false,
     detectRecaps: false,
     detectCredits: options.detectCredits,
+    extraIntroTitles: options.extraIntroTitles,
+    extraRecapTitles: options.extraRecapTitles,
+    extraCreditsTitles: options.extraCreditsTitles,
   };
 }
 
@@ -230,6 +236,9 @@ function getDetectionOptionsFromPreferences() {
     detectIntros: isIntroDetectionEnabled(),
     detectRecaps: isRecapDetectionEnabled(),
     detectCredits: isCreditDetectionEnabled(),
+    extraIntroTitles: getStringPreference(PREF_EXTRA_INTRO_TITLES, ''),
+    extraRecapTitles: getStringPreference(PREF_EXTRA_RECAP_TITLES, ''),
+    extraCreditsTitles: getStringPreference(PREF_EXTRA_CREDITS_TITLES, ''),
   };
 }
 
@@ -309,71 +318,30 @@ function hasEnabledDetectionMethod(options) {
   );
 }
 
-function getSectionTitles(sectionGroup) {
-  if (!sectionGroup || !Array.isArray(sectionGroup.sections)) return [];
-
-  const titles = [];
-  for (let i = 0; i < sectionGroup.sections.length; i++) {
-    const section = sectionGroup.sections[i];
-    for (let j = 0; j < section.titles.length; j++) {
-      titles.push(section.titles[j]);
-    }
-  }
-  return titles;
+function getSkipLabel(section) {
+  return 'Skip ' + getSectionLabelNoun(section);
 }
 
-function getSectionSources(sectionGroup) {
-  if (!sectionGroup || !Array.isArray(sectionGroup.sections)) return [];
-
-  const sources = [];
-  for (let i = 0; i < sectionGroup.sections.length; i++) {
-    const source = sectionGroup.sections[i].source;
-    if (sources.indexOf(source) === -1) {
-      sources.push(source);
-    }
-  }
-  return sources;
+function getSectionDescription(section) {
+  return section ? getSectionLabelNoun(section).toLowerCase() : 'section';
 }
 
-function getSkipLabel(sectionGroup) {
-  if (!sectionGroup) return 'Skip Intro';
-  if (sectionGroup.sections.length > 1) return 'Skip Opening';
+function getSectionLabelNoun(section) {
+  if (!section) return 'Intro';
 
-  const kind = sectionGroup.sections[0].kind;
-  if (kind === SECTION_KIND_CREDITS) return 'Skip Credits';
-  if (kind === SECTION_KIND_RECAP) return 'Skip Recap';
-  if (kind === SECTION_KIND_SECTION) return 'Skip Opening';
-  return 'Skip Intro';
-}
-
-function getSectionDescription(sectionGroup) {
-  if (!sectionGroup) return 'section';
-  if (sectionGroup.sections.length > 1) return 'opening';
-
-  const kind = sectionGroup.sections[0].kind;
-  if (kind === SECTION_KIND_CREDITS) return 'credits';
-  if (kind === SECTION_KIND_RECAP) return 'recap';
-  if (kind === SECTION_KIND_SECTION) return 'opening';
-  return 'intro';
-}
-
-function getSectionLabelNoun(sectionGroup) {
-  if (!sectionGroup) return 'Intro';
-  if (sectionGroup.sections.length > 1) return 'Opening';
-
-  const kind = sectionGroup.sections[0].kind;
+  const kind = section.kind;
   if (kind === SECTION_KIND_CREDITS) return 'Credits';
   if (kind === SECTION_KIND_RECAP) return 'Recap';
   if (kind === SECTION_KIND_SECTION) return 'Opening';
   return 'Intro';
 }
 
-function getAutoSkipPendingLabel(sectionGroup) {
-  return 'Skipping ' + getSectionLabelNoun(sectionGroup);
+function getAutoSkipPendingLabel(section) {
+  return 'Skipping ' + getSectionLabelNoun(section);
 }
 
-function getAutoSkipCompleteLabel(sectionGroup) {
-  return getSectionLabelNoun(sectionGroup) + ' Skipped';
+function getAutoSkipCompleteLabel(section) {
+  return getSectionLabelNoun(section) + ' Skipped';
 }
 
 function getAutoSkipSettingsFromPreferences() {
@@ -394,62 +362,42 @@ function getAutoSkipSettingForTitleKind(kind, settings) {
   return settings.titleIntros;
 }
 
-function resolveAutoSkipForSection(sectionGroup, settings) {
-  if (!sectionGroup || !Array.isArray(sectionGroup.sections) || !sectionGroup.sections.length) {
-    return false;
-  }
+function resolveAutoSkipForSection(section, settings) {
+  if (!section) return false;
+  if (section.source === SECTION_SOURCE_AUDIO_FINGERPRINT) return !!settings.audioMatching;
 
-  for (let i = 0; i < sectionGroup.sections.length; i++) {
-    const section = sectionGroup.sections[i];
-    if (section.source === SECTION_SOURCE_AUDIO_FINGERPRINT) {
-      if (settings.audioMatching) return true;
-      continue;
-    }
-    if (
-      section.source === SECTION_SOURCE_TITLE &&
-      getAutoSkipSettingForTitleKind(section.kind, settings)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  return (
+    section.source === SECTION_SOURCE_TITLE &&
+    !!getAutoSkipSettingForTitleKind(section.kind, settings)
+  );
 }
 
-function isIntroLikeSectionGroup(sectionGroup) {
-  if (!sectionGroup || !Array.isArray(sectionGroup.sections) || !sectionGroup.sections.length) {
-    return false;
-  }
-
-  for (let i = 0; i < sectionGroup.sections.length; i++) {
-    const kind = sectionGroup.sections[i].kind;
-    if (kind === SECTION_KIND_INTRO || kind === SECTION_KIND_SECTION) {
-      return true;
-    }
-  }
-
-  return false;
+function isIntroLikeSection(section) {
+  return !!(
+    section &&
+    (section.kind === SECTION_KIND_INTRO || section.kind === SECTION_KIND_SECTION)
+  );
 }
 
-function shouldDisableIntroAutoSkipForFirstEpisodeOfSeason(sectionGroup, mediaPath, settings) {
-  if (settings.autoSkipFirstEpisodeOfSeason || !isIntroLikeSectionGroup(sectionGroup)) return false;
+function shouldDisableIntroAutoSkipForFirstEpisodeOfSeason(section, mediaPath, settings) {
+  if (settings.autoSkipFirstEpisodeOfSeason || !isIntroLikeSection(section)) return false;
 
   const parsed = parseSeasonEpisode(mediaPath);
   return !!(parsed && !parsed.isSpecial && parsed.episode === 1);
 }
 
-function addAutoSkipState(sectionGroups, mediaPath) {
+function addAutoSkipState(sections, mediaPath) {
   const settings = getAutoSkipSettingsFromPreferences();
-  return sectionGroups.map(function (sectionGroup) {
-    let autoSkip = resolveAutoSkipForSection(sectionGroup, settings);
+  return sections.map(function (section) {
+    let autoSkip = resolveAutoSkipForSection(section, settings);
     if (
       autoSkip &&
-      shouldDisableIntroAutoSkipForFirstEpisodeOfSeason(sectionGroup, mediaPath, settings)
+      shouldDisableIntroAutoSkipForFirstEpisodeOfSeason(section, mediaPath, settings)
     ) {
       log('Auto-skip disabled: not skipping intro for first episode of the season');
       autoSkip = false;
     }
-    return Object.assign({}, sectionGroup, {
+    return Object.assign({}, section, {
       autoSkip: autoSkip,
       autoSkipStartDelaySeconds: autoSkip ? settings.startDelaySeconds : 0,
       showAutoSkipStatus: autoSkip && settings.showStatus,
@@ -457,8 +405,8 @@ function addAutoSkipState(sectionGroups, mediaPath) {
   });
 }
 
-function shouldAutoSkipSection(sectionGroup) {
-  return !!(sectionGroup && sectionGroup.autoSkip);
+function shouldAutoSkipSection(section) {
+  return !!(section && section.autoSkip);
 }
 
 function getNearestChapterStartInWindow(chapters, target, maxDistance) {
@@ -480,36 +428,34 @@ function getNearestChapterStartInWindow(chapters, target, maxDistance) {
   return nearestStart;
 }
 
-function snapAudioSectionGroupToChapters(sectionGroup, chapters) {
-  if (!sectionGroup || !Array.isArray(sectionGroup.sections) || !sectionGroup.sections.length) {
-    return sectionGroup;
-  }
+function snapAudioSectionToChapters(section, chapters) {
+  if (!section) return section;
 
   const nearestStart = getNearestChapterStartInWindow(
     chapters,
-    sectionGroup.start,
+    section.start,
     AUDIO_MATCH_CHAPTER_SNAP_WINDOW,
   );
   const nearestEnd = getNearestChapterStartInWindow(
     chapters,
-    sectionGroup.end,
+    section.end,
     AUDIO_MATCH_CHAPTER_SNAP_WINDOW,
   );
-  const snappedStart = nearestStart === null ? sectionGroup.start : nearestStart;
-  const snappedEnd = nearestEnd === null ? sectionGroup.end : nearestEnd;
+  const snappedStart = nearestStart === null ? section.start : nearestStart;
+  const snappedEnd = nearestEnd === null ? section.end : nearestEnd;
 
-  if (snappedStart === sectionGroup.start && snappedEnd === sectionGroup.end) {
-    return sectionGroup;
+  if (snappedStart === section.start && snappedEnd === section.end) {
+    return section;
   }
   if (snappedEnd <= snappedStart) {
-    return sectionGroup;
+    return section;
   }
 
   log(
     'Snapped audio intro to chapter marker(s): ' +
-      sectionGroup.start.toFixed(2) +
+      section.start.toFixed(2) +
       's-' +
-      sectionGroup.end.toFixed(2) +
+      section.end.toFixed(2) +
       's -> ' +
       snappedStart.toFixed(2) +
       's-' +
@@ -517,16 +463,9 @@ function snapAudioSectionGroupToChapters(sectionGroup, chapters) {
       's',
   );
 
-  return Object.assign({}, sectionGroup, {
+  return Object.assign({}, section, {
     start: snappedStart,
     end: snappedEnd,
-    sections: sectionGroup.sections.map(function (currentSection, index) {
-      if (index !== 0) return currentSection;
-      return Object.assign({}, currentSection, {
-        start: snappedStart,
-        end: snappedEnd,
-      });
-    }),
   });
 }
 
@@ -586,11 +525,11 @@ async function detectFromAudioMatch(context, options, runId) {
       return [];
     }
 
-    const audioSectionGroup = await detectSectionFromAudioMatch(options);
+    const audioSection = await detectSectionFromAudioMatch(options);
     if (runId !== detectionRunId) return null;
 
-    return audioSectionGroup
-      ? [snapAudioSectionGroupToChapters(audioSectionGroup, context.chapters)]
+    return audioSection
+      ? [snapAudioSectionToChapters(audioSection, context.chapters)]
       : [];
   } catch (error) {
     if (runId !== detectionRunId) return null;
@@ -627,18 +566,18 @@ function finishDetection(sections, emptyMessage, context) {
   }
 
   for (let i = 0; i < detectedSections.length; i++) {
-    const sectionGroup = detectedSections[i];
+    const section = detectedSections[i];
     log(
       'Detected ' +
-        getSectionDescription(sectionGroup) +
+        getSectionDescription(section) +
         ' from ' +
-        sectionGroup.start.toFixed(2) +
+        section.start.toFixed(2) +
         's to ' +
-        sectionGroup.end.toFixed(2) +
+        section.end.toFixed(2) +
         's via ' +
-        getSectionSources(sectionGroup).join(', ') +
+        section.source +
         ': ' +
-        getSectionTitles(sectionGroup).join(', '),
+        section.titles.join(', '),
     );
   }
 
@@ -700,22 +639,22 @@ function dismissOverlay() {
   setOverlayVisible(false, null);
 }
 
-function skipSection(sectionGroup, reason, options) {
-  if (!sectionGroup) {
+function skipSection(section, reason, options) {
+  if (!section) {
     log('Skip requested with no detected section');
     dismissOverlay();
     return;
   }
 
   const bufferSeconds = getSkipEndBufferSeconds();
-  const seekTarget = Math.max(sectionGroup.start, sectionGroup.end - bufferSeconds);
+  const seekTarget = Math.max(section.start, section.end - bufferSeconds);
   log(reason + ' - seeking to ' + seekTarget.toFixed(2) + 's');
   core.seekTo(seekTarget);
-  dismissedSectionIds[sectionGroup.id] = true;
+  dismissedSectionIds[section.id] = true;
   if (
     !(options && options.keepOverlayVisible) &&
     currentOverlaySection &&
-    currentOverlaySection.id === sectionGroup.id
+    currentOverlaySection.id === section.id
   ) {
     setOverlayVisible(false, null);
   }
@@ -792,32 +731,32 @@ function initializeOverlay() {
   overlay.loadFile('overlay.html');
 }
 
-function sendState(visible, sectionGroup, options) {
+function sendState(visible, section, options) {
   const resolvedOptions = options || {};
   const mode = resolvedOptions.mode === 'status' ? 'status' : 'prompt';
   const autoDismissSeconds = getPopupAutoDismissSeconds();
   overlayVisible = visible;
   overlayMode = visible ? mode : null;
-  currentOverlaySection = visible && mode === 'prompt' ? sectionGroup : null;
+  currentOverlaySection = visible && mode === 'prompt' ? section : null;
   if (!visible || mode !== 'status') {
     autoSkipStatusSectionId = null;
     autoSkipStatusPhase = null;
   }
   overlay.postMessage('state', {
     visible: visible,
-    sectionId: sectionGroup ? sectionGroup.id : null,
+    sectionId: section ? section.id : null,
     mode: mode,
     autoDismissMs: autoDismissSeconds * 1000,
     playbackPaused: isPlaybackPaused(),
     label: resolvedOptions.label || null,
-    skipLabel: getSkipLabel(sectionGroup),
+    skipLabel: getSkipLabel(section),
     buttonStyle: getPopupButtonStyle(),
   });
 }
 
-function setOverlayVisible(visible, sectionGroup, options) {
+function setOverlayVisible(visible, section, options) {
   const mode = options && options.mode === 'status' ? 'status' : 'prompt';
-  sendState(visible, sectionGroup, options);
+  sendState(visible, section, options);
   overlay.setClickable(visible && mode === 'prompt');
 }
 
@@ -828,33 +767,33 @@ function hideAutoSkipStatus(sectionId) {
   }
 }
 
-function showAutoSkipStatus(sectionGroup, phase) {
-  if (!sectionGroup) return;
+function showAutoSkipStatus(section, phase) {
+  if (!section) return;
 
   if (
     overlayVisible &&
     overlayMode === 'status' &&
-    autoSkipStatusSectionId === sectionGroup.id &&
+    autoSkipStatusSectionId === section.id &&
     autoSkipStatusPhase === phase
   ) {
     return;
   }
 
   clearAutoSkipStatusTimer();
-  autoSkipStatusSectionId = sectionGroup.id;
+  autoSkipStatusSectionId = section.id;
   autoSkipStatusPhase = phase;
-  setOverlayVisible(true, sectionGroup, {
+  setOverlayVisible(true, section, {
     mode: 'status',
     label:
       phase === 'complete'
-        ? getAutoSkipCompleteLabel(sectionGroup)
-        : getAutoSkipPendingLabel(sectionGroup),
+        ? getAutoSkipCompleteLabel(section)
+        : getAutoSkipPendingLabel(section),
   });
 
   if (phase === 'complete') {
     autoSkipStatusHideTimer = setTimeout(function () {
       autoSkipStatusHideTimer = null;
-      hideAutoSkipStatus(sectionGroup.id);
+      hideAutoSkipStatus(section.id);
     }, AUTO_SKIP_STATUS_AFTER_SECONDS * 1000);
   }
 }
@@ -866,14 +805,14 @@ function getActiveSection(position, leadInSeconds) {
       : INTRO_PROMPT_LEAD_IN;
 
   for (let i = 0; i < detectedSections.length; i++) {
-    const sectionGroup = detectedSections[i];
-    if (dismissedSectionIds[sectionGroup.id]) continue;
+    const section = detectedSections[i];
+    if (dismissedSectionIds[section.id]) continue;
 
     if (
-      position >= Math.max(0, sectionGroup.start - resolvedLeadInSeconds) &&
-      position < sectionGroup.end
+      position >= Math.max(0, section.start - resolvedLeadInSeconds) &&
+      position < section.end
     ) {
-      return sectionGroup;
+      return section;
     }
   }
 

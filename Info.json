@@ -1,9 +1,9 @@
 {
   "name": "Skip Intro",
   "identifier": "com.pparanoiidd.skipintro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "ghRepo": "pparanoiidd/iina-skip-intro",
-  "ghVersion": 1,
+  "ghVersion": 2,
   "author": {
     "name": "pparanoiidd"
   },
@@ -18,6 +18,9 @@
     "detect_chapter_timing": false,
     "detect_recaps": false,
     "detect_credits": true,
+    "extra_intro_titles": "",
+    "extra_recap_titles": "",
+    "extra_credits_titles": "",
     "auto_skip_title_intros": false,
     "auto_skip_title_recaps": false,
     "auto_skip_title_credits": false,
